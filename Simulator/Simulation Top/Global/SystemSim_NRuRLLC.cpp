@@ -60,6 +60,10 @@ int main()
 		{
 			if (Sim.TTI == 0 || Sim.TTI % Sim.feedbackPeriod == 0)
 			{
+				/*
+				if(Sim.TTI > 0)
+					Sim.channel->LongTermChannel();
+				*/
 				Sim.scheduling->Feedback(); // MS feedback				
 			}
 			Sim.OFDM = 0;
@@ -331,6 +335,12 @@ void SystemSim::Conclude()
 	Sim.channel->Conclude();
 	Sim.performance->Conclude();
 	Sim.scheduling->Conclude();
+
+	//新加的析构
+	delete this->network;
+	delete this->channel;
+	delete this->performance;
+	delete this->scheduling;
 
 }
 

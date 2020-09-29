@@ -89,6 +89,10 @@ void Network::Initialize(string fileName)
 	sectorDegree.alpha0 = (PI / 180) * 30;
 	sectorDegree.alpha1 = (PI / 180) * 150;
 	sectorDegree.alpha2 = (PI / 180) *(-90);
+	sectorAngle = new double[3];
+	sectorAngle[0] = 30;
+	sectorAngle[1] = 150;
+	sectorAngle[2] = -90;
 	beta = 0.0;
 	gamma = 0.0;
 
@@ -158,8 +162,20 @@ void Network::PlaceWraparound()
 
 void Network::Conclude()
 {
+	//新加的析构
+	delete[] sectorAngle;
+	for (int bsID = 0; bsID < Sim.network->numBS; bsID++)
+		delete BS[bsID];
+	//delete[] BS;
 }
 
 void Network::ConcludeIteration()
 {
+
+	//新加的析构，保证每次仿真结束后，空间的释放
+	for (int msID = 0; msID < Sim.network->numMS; msID++)
+		delete MS[msID];
+	for (int umsID = 0; umsID < Sim.network->numMS; umsID++)
+		delete UMS[umsID];
+
 }

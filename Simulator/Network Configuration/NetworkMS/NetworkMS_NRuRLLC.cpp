@@ -49,15 +49,14 @@ void NetworkMS::Initialize(int msID, int bsID)
 	this->attachedBS = bsID; // Temporary association	
 	this->pos3D;
 	this->location;
-	this->interArrivalTime.zeros(Sim.numTTI);
-	//自己加的
+	//this->interArrivalTime.zeros(Sim.numTTI);
 
 	
 	// MS Placement
 	if (Sim.network->NetworkModel == NETWORK::UrbanMacroCell){
 		this->PlaceRandomHexagonal(); 
 	}
-
+	/*
 	if (Sim.network->bufferModel == RRM::FullBuffer) {
 		// Buffer Size
 	}
@@ -70,9 +69,10 @@ void NetworkMS::Initialize(int msID, int bsID)
 		this->arrivalTime = 0;
 		this->datasize = Sim.scheduling->dataSize;
 	}
-
+	*/
 }
 
+/*
 void NetworkMS::BufferUpdate()
 {
 	if ((Sim.TTI == arrivalTime))
@@ -82,7 +82,7 @@ void NetworkMS::BufferUpdate()
 	}
 	
 }
-
+*/
 
 //位置是相对位置加绝对位置，基站是绝对位置
 void NetworkMS::PlaceRandomHexagonal()
@@ -117,7 +117,7 @@ void NetworkMS::PlaceRandomHexagonal()
 			this->location = Indoor;
 			this->indoorDistance2D = arma::randu() * 25;
 
-			height = 3 * (rand() % ((rand() % 5) + 4)) + 1.5;
+			height =(double)(3 * (rand() % ((rand() % 5) + 4))) + 1.5;
 		}
 		else
 		{
@@ -223,7 +223,10 @@ void NetworkMS::Associate(int msID, arma::vec RSRP)
 	arma::uvec indices; indices.zeros(SLS_MAX_BS);	
 	indices = arma::sort_index(RSRP, "descend");
 	for (int l = 0; l < Sim.network->numBS; l++)
+	{
 		interferenceIndex(l) = indices(l);
+		//cout<< RSRP(indices(l)) <<endl;
+	}
 
 	MS[msID]->channel->associatedBsIndex = indices(0);
 	BS[indices(0)]->network->attachedMS[BS[indices(0)]->channel->NumAssociatedMS] = msID;

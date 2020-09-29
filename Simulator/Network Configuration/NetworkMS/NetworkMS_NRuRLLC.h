@@ -66,23 +66,23 @@ public:
 	double height; // Antenna height
 	complex<double> pos; // (X,Y) Position
 	arma::mat pos3D; // (X,Y,Z) Position
-	arma::vec interArrivalTime;
+	//arma::vec interArrivalTime;
 	enum scenario;
 	enum MS_location;
 	int location;
 	double indoorDistance2D;
-	int arrivalTime;
-	double msBuffer;
-	double datasize;
+	//int arrivalTime;
+	//double msBuffer;
+	//double datasize;
 	arma::mat wraparoundposBS; // Wraparound BSs' (X,Y,Z) Position //19*3
 	double direction; // antenna boresight for directional antenna
 	double velocityVertical;
 	double velocityHorizontal;
-	int bufferTime;
+	//int bufferTime;
 	
 	// Network MS functions
 	void Initialize(int msID, int bs); // Initialization
-	void BufferUpdate();
+	//void BufferUpdate();
 	void WrapAround(); //Wraparound
 	void Associate(int msID, arma::vec RSRP); // Association
 	void PlaceRandomHexagonal(); // Place in a random pattern in hexagonal grid

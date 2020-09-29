@@ -54,6 +54,9 @@ class SchedulingMS
 public:
 	int id; // MS ID
 	int MCS;
+	int interArrivalTime;//数据到达时间间隔（单位是OFDM符号）
+	double msBuffer;
+	double dataSize;
 	int Pi; //1被抢占, 0没有
 	double downlinkaveragedThroghput, uplinkaveragedThroghput;
 	double downlinkspectralEfficiency, uplinkspectralEfficiency;
@@ -67,9 +70,10 @@ public:
 	double downlinkESINR, downlinkESINR0, uplinkESINR;
 	double HARQeSINR;
 	int Maxrettime; //最大重传次数
-	int Timer; //定时器
+	//int Timer; //定时器
 
 	void Initialize(int ms);
+	void BufferUpdate();
 	void Feedback();
 	//void MuMimoFeedback(int msID, int type);
 	void ReceivedSINR();

@@ -1,3 +1,9 @@
 2020/09/25 增加了一个天线接收测试cpp文件，包括MMSE、MR、ZF三种接收方式。
 2020/09/29 在SystemSim_NRuRLLC的conclude函数和Network_NRuRLLC的Conclude()和ConcludeIteration()添加了new对象的析构；
-	修改了NetworkMS_NRuRLLC.cpp和SchedulingMS_NRuRLLC.cpp，将MS的Buffer操作搬移到了scheduling模块；
+	修改了NetworkMS_NRuRLLC.cpp和SchedulingMS_NRuRLLC.cpp，将MS的Buffer操作搬移到了scheduling模块。
+2020/09/30 在SchedulingMS_NRuRLLC.h增加了与Packet相关的成员变量，模拟packet缓存区；	SchedulingBS_NRuRLLC.h增加了成员变量TB，模拟传输块；
+	SchedulingMS_NRuRLLC.cpp中initial和buffer_update进行相应修改；
+	SchedulingBS_NRuRLLC.cpp中MS资源分配部分，进行了缓存更新和SDU切割操作、TB装配操作。
+2020/10/05 在SchedulingBS的reset中增加了TB的清空和空间释放，修改了SystemSim的reset函数的流程；
+	在PeformingMS中，将需要重传的TB重新放回MS的Packet缓存的头部，优先进行传输。相应修改了PeformingBS的Measure函数；
+	在Scheduling_NRuRLLC.h中增加了成员变量resource_used，记录每个基站使用的资源，以便后续计算干扰。

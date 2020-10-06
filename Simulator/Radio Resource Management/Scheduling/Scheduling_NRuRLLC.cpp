@@ -64,6 +64,7 @@ void Scheduling::Initialize(string fileName)
 		}
 	}
 	numMaxLayer = 1;
+	resource_used.zeros(Sim.network->numBS, numRB);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -92,7 +93,8 @@ void Scheduling::BufferUpdate()
 	{
 		for (int i = 0; i < Sim.network->numMS; i++)
 		{
-			MS[i]->network->BufferUpdate();
+			//MS[i]->network->BufferUpdate();
+			MS[i]->scheduling->BufferUpdate();//将buffer操作转移到scheduling模块。
 		}
 	}
 	
@@ -149,12 +151,19 @@ void Scheduling::ReceivedSINRCalculation()
 	cout << "[Scheduling]: Received SINR calculation " << endl;
 }
 
-void Scheduling::Conclude()
+void Scheduling::Reset()
 {
-	
+	resource_used.zeros(Sim.network->numBS, numRB);
+	for (int BSID = 0; BSID < Sim.network->numBS; BSID++)
+	{
+		BS[BSID]->scheduling->Reset(BSID);
+	}
 }
 
+void Scheduling::Conclude()
+{
 
+}
 
 void Scheduling::ConcludeIteration()
 {

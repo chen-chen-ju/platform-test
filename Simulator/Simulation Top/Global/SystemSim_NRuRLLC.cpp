@@ -58,6 +58,7 @@ int main()
 
 		for (Sim.TTI = 0; Sim.TTI < Sim.numTTI; Sim.TTI++)
 		{
+			//Sim.scheduling->resource_used.print();
 			if (Sim.TTI == 0 || Sim.TTI % Sim.feedbackPeriod == 0)
 			{
 				/*
@@ -295,16 +296,18 @@ void SystemSim::Demonstration() {
 	//Mainchart_Latency.close();
 }
 
+//修改了，增加了scheduling的TTI结束时的重置操作，将相关操作转移。
 void SystemSim::Reset()
 {
+	scheduling->Reset();
 	//结构应该是sim.scheduling->Reset到BS[BSID]->scheduling->Reset
 	for (int BSID = 0; BSID < Sim.network->numBS; BSID++)
 	{
-		BS[BSID]->scheduling->Reset(BSID);
+		//BS[BSID]->scheduling->Reset(BSID);
 		BS[BSID]->performance->Reset();
 	}
-	Sim.performance->throughputMS = 0;
-	Sim.performance->throughputUMS = 0;
+	performance->throughputMS = 0;
+	performance->throughputUMS = 0;
 }
 
 /*-------------------------------------------------------------------------*/

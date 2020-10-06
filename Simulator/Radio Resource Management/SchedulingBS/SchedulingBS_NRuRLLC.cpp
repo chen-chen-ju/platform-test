@@ -121,6 +121,7 @@ void SchedulingBS::Schedule(int bsID)
 
 	int Umsid = 0;
 	int RB_inCB = 0;
+	//int Packet_size = 256+8;//正常一个pdu大小,定义放到Packet.h的宏定义中
 	//int CB_size = 1; 
 	//一个TTI一个CB
 	for (int Umsid = 0; Umsid < BS[bsID]->channel->NumAssociatedUMS; Umsid++)
@@ -262,17 +263,24 @@ void SchedulingBS::Schedule(int bsID)
 			{
 				int msID = BS[bsID]->network->attachedMS[index[j]]; //MS ID
 				MS[msID]->scheduling->downlinkESINR;
-				if (MS[msID]->network->msBuffer > 0) //有数据要传
+				if (MS[msID]->scheduling->msBuffer > 0) //有数据要传
 				{
-					int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->network->msBuffer);
+					int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->scheduling->msBuffer);
 
 					vector<int> newRB;
 					pair <int, vector <int> > newMap = make_pair(msID, newRB);
+
+					//新增TB
+					vector <Packet> list;
+					pair<int, vector <Packet> > newTB = make_pair(msID, list);
+
 
 					for (int i = 0; i < num_RB; i++)
 					{
 						if (RB_free.size() > 0) //只能使用空闲的RB资源
 						{
+							Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;//标记使用了该资源，在TTI结束时清除标记
+							
 							newMap.second.push_back(RB_free[0]);
 							RB_belongMS.push_back(RB_free[0]);
 							RB_belong[RB_free[0]] = msID;
@@ -284,6 +292,38 @@ void SchedulingBS::Schedule(int bsID)
 							{
 								MS[msID]->performance->packet++;
 								allocationMapMS.insert(newMap);
+
+								
+								//根据TB大小，切割整合packet
+								uint TBsize = (uint) MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, (int)newMap.second.size());
+								
+								while (TBsize > 0)
+								{
+									Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+									if (TBsize >= temp.Gettotalsize())
+									{
+										TBsize -= temp.Gettotalsize();
+										newTB.second.push_back(temp);
+										MS[msID]->scheduling->PacketBuffer.pop_front();
+									}
+									else
+									{
+										uint resbit = temp.Gettotalsize() - TBsize;
+										temp.SetSize(TBsize - temp.GetHead());
+										temp.Setdivide(true);
+										temp.Setindex(MS[msID]->scheduling->divide_index[0]);
+										newTB.second.push_back(temp);
+
+										temp.SetSize(resbit);
+										//切割剩余部分留在缓存中
+										MS[msID]->scheduling->PacketBuffer.pop_front();
+										MS[msID]->scheduling->PacketBuffer.push_front(temp);
+										//去除使用的切割标记
+										MS[msID]->scheduling->divide_index.erase(MS[msID]->scheduling->divide_index.begin());
+										break;
+									}
+								}
+								TB.insert(newTB);
 							}
 							
 							cout << "BS" << id << "无可用RB了" << endl;
@@ -291,7 +331,16 @@ void SchedulingBS::Schedule(int bsID)
 							return;
 						}
 					}
-					MS[msID]->performance->packet++;
+
+					//资源充足，所有packet都放入TB
+					while (!MS[msID]->scheduling->PacketBuffer.empty())
+					{
+						newTB.second.push_back(MS[msID]->scheduling->PacketBuffer.front());
+						MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+					}
+					TB.insert(newTB);
+
+					MS[msID]->performance->packet++;//统计TB个数
 					allocationMapMS.insert(newMap);
 				}
 				
@@ -624,8 +673,7 @@ arma::cx_mat* SchedulingBS::PrecodingMatrix(enum Precoding_Matrix precodingtype,
 
 void SchedulingBS::Reset(int BSID)
 {
-	//把MS占用资源释放了
-	allocationMapUMS;
+	//把MS占用资源释放，把MS使用的资源放入空闲资源
 	allocationMapMS.erase(allocationMapMS.begin(), allocationMapMS.end());
 	//RB_belongMS.clear();
 	int flag = RB_belongMS.size();
@@ -635,17 +683,10 @@ void SchedulingBS::Reset(int BSID)
 		RB_belong(RB_belongMS[0]) = -1;
 		RB_belongMS.erase(RB_belongMS.begin());
 	}
-	//把MS使用的资源放入空闲资源
-	/*
-	for (int i = 0; i < Sim.scheduling->numRB; i++)
-	{
-		if (RB_belong(i) != -2)
-		{
-			RB_belong(i) = -1;
-			RB_free.push_back(i);
-		}
-	}
-	*/
+	//清空TB,释放空间
+	//vector<Packet> vecEmpty;
+	TB.erase(TB.begin(),TB.end());
+	
 	for (int MSID = 0; MSID < BS[BSID]->channel->NumAssociatedMS; MSID++)
 	{
 		MS[MSID]->scheduling->Reset(MSID);

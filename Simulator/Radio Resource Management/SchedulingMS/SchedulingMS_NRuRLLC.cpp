@@ -173,22 +173,56 @@ void SchedulingMS::Initialize(int ms)
 {
 	id = ms; // MS ID
 	Maxrettime = 0;
+	for (uint i = 0; i < 256; i++)
+	{
+		index.push_back(i);
+		if (i < 32)
+		{
+			divide_index.push_back(i);
+		}
+	}
 	if (Sim.network->bufferModel == RRM::NonFullBuffer)
 	{
 		dataSize = Sim.scheduling->dataSize;
 		interArrivalTime = 14*ceil(-(1 / Sim.network->meanArrivalTime) * log(1 - arma::randu()) * 10 / 5); // first traffic generation TTI for non-full-buffer MS
-		msBuffer = 0.0; // buffer initialization 
+		msBuffer = 0.0; // buffer initialization
 	}
 }
 
-void SchedulingMS::BufferUpdate()
+void SchedulingMS::BufferUpdate()//每次数据到达相当于来一个RLC SDU
 {
 	if ((14 * Sim.TTI + Sim.OFDM == interArrivalTime))
 	{
 		msBuffer = msBuffer + dataSize;
 		interArrivalTime = 14 * Sim.TTI + Sim.OFDM + 14*ceil(-(1 / Sim.network->meanArrivalTime) * log(1 - arma::randu()) * 10 / 5);// * 10 / 5  强度为1的possion分布。OFDM应该为0，只在每个TTI统计数据包
-		cout << "ID:  " << id << "  arrivaltime:  " << interArrivalTime << endl;
-		cout << "msBuffer:  " << msBuffer << endl;
+		
+
+		//对packet缓存进行操作
+		Packet newpakcket;
+		uint num =(uint) dataSize / newpakcket.GetSize();
+		uint res =(uint) dataSize % newpakcket.GetSize();
+		for (uint i = 0; i < num; i++)
+		{
+			if (index.size() == 0)
+				cout << "警告：缓存区数据包个数超过了256" << endl;
+			newpakcket.SetID(index[0]);//packet的唯一标识
+			index.erase(index.begin());
+			PacketBuffer.push_back(newpakcket);
+		}
+		if (res > 0)//最后一个包可能不是填满的
+		{
+			if (index.size() == 0)
+				cout << "警告：缓存区数据包个数超过了256" << endl;
+			newpakcket.SetID(index[0]);
+			newpakcket.SetSize(res);
+			index.erase(index.begin());
+			PacketBuffer.push_back(newpakcket);
+		}
+
+		
+
+		//cout << "ID:  " << id << "  arrivaltime:  " << interArrivalTime << endl;
+		//cout << "msBuffer:  " << msBuffer << endl;
 	}
 
 }
@@ -267,16 +301,21 @@ void SchedulingMS::Feedback()//非完美信道下特征，HARQ 38系列
 	tempRH.zeros(Sim.channel->NumberOfTransmitAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
 	//NumberOfReceiveAntennaPort n;    NumberOfTransmitAntennaPort m
 	MS[id]->channel->ShortTermChannel(id);
+
+	/*
 	for (int RBindex = 0; RBindex <  (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
 	{
 		tempRHr = tempRHr + MS[id]->channel->FrequencyChannel(0, 0, RBindex)	*	(MS[id]->channel->FrequencyChannel(0, 0, RBindex).t()) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);//n*n
 		tempRH = tempRH + (MS[id]->channel->FrequencyChannel(0, 0, RBindex).t())	*	(MS[id]->channel->FrequencyChannel(0, 0, RBindex)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);//m*m
 		//连接基站的信道HHT，有用信号。
 	}
-	
+	*/
+
 	arma::svd(tempU, temps, tempV, tempRH, "std");//U\S\V m*m
 	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
 	{
+		tempRHr = MS[id]->channel->FrequencyChannel(0, 0, RBindex) * MS[id]->channel->FrequencyChannel(0, 0, RBindex).t();
+		tempRH = MS[id]->channel->FrequencyChannel(0, 0, RBindex).t() * MS[id]->channel->FrequencyChannel(0, 0, RBindex);
 		tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 		for (int si = 1; si < SLS_MAX_BS; si++)
 		{
@@ -310,15 +349,18 @@ void SchedulingMS::ReceivedSINR()
 	tempRHr.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 	tempRH.zeros(Sim.channel->NumberOfTransmitAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
 	MS[id]->channel->ShortTermChannel(id);
+	/*
 	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
 	{
 		tempRHr = tempRHr + MS[id]->channel->FrequencyChannel(0, 0, RBindex)	*	(MS[id]->channel->FrequencyChannel(0, 0, RBindex).t()) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);//.t()是共轭转置
 		tempRH = tempRH + (MS[id]->channel->FrequencyChannel(0, 0, RBindex).t())	*	(MS[id]->channel->FrequencyChannel(0, 0, RBindex)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
 	}
-
+	*/
 	arma::svd(tempU, temps, tempV, tempRH, "std");//svd(U,S,V,A)，奇异值分解，A=USV'
 	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
 	{
+		tempRHr = MS[id]->channel->FrequencyChannel(0, 0, RBindex) * MS[id]->channel->FrequencyChannel(0, 0, RBindex).t();
+		tempRH = MS[id]->channel->FrequencyChannel(0, 0, RBindex).t() * MS[id]->channel->FrequencyChannel(0, 0, RBindex);
 		tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 		for (int si = 1; si < SLS_MAX_BS; si++)
 		{

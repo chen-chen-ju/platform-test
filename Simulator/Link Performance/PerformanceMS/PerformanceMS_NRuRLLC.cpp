@@ -54,7 +54,7 @@ void PerformanceMS::Initialize(int ms)
 
 
 
-void PerformanceMS::Measure(vector <int> RB_list)
+void PerformanceMS::Measure(vector <int> RB_list, vector <Packet> TB)
 {
 	MS[id]->scheduling->ReceivedSINR();
 	double temp = MS[id]->scheduling->downlinkESINR;
@@ -79,9 +79,9 @@ void PerformanceMS::Measure(vector <int> RB_list)
 			{
 				instantThroughput = TB_size * 1000;
 				instantThroughput0 = 15000*log2(1 + temp);
-				MS[id]->network->msBuffer = MS[id]->network->msBuffer - TB_size;
-				if (MS[id]->network->msBuffer < 0)
-					MS[id]->network->msBuffer = 0;
+				MS[id]->scheduling->msBuffer = MS[id]->scheduling->msBuffer - TB_size;
+				if (MS[id]->scheduling->msBuffer < 0)
+					MS[id]->scheduling->msBuffer = 0;
 				MS[id]->scheduling->HARQeSINR = 0;
 				MS[id]->scheduling->Maxrettime = 0;
 			}
@@ -94,9 +94,19 @@ void PerformanceMS::Measure(vector <int> RB_list)
 				MS[id]->scheduling->Maxrettime += 1;
 				if (MS[id]->scheduling->Maxrettime > 3) //达到最大重传次数限制
 				{
-					MS[id]->network->msBuffer - MS[id]->network->datasize;
+					MS[id]->scheduling->msBuffer -= TB_size;
+					if (MS[id]->scheduling->msBuffer < 0)
+						MS[id]->scheduling->msBuffer = 0;
 					MS[id]->scheduling->HARQeSINR = 0;
 					MS[id]->scheduling->Maxrettime = 0;
+				}
+				else
+				{
+					while (!TB.empty())
+					{
+						MS[id]->scheduling->PacketBuffer.push_front(TB.back());//让出错的TB优先重传
+						TB.pop_back();
+					}
 				}
 			}
 		}
@@ -106,7 +116,7 @@ void PerformanceMS::Measure(vector <int> RB_list)
 	downlinkThroghput = downlinkThroghput * (Sim.TTI) / (Sim.TTI + 1) + instantThroughput / (Sim.TTI + 1);
 }
 
-double PerformanceMS::FER(double SINR, int MCS)
+double PerformanceMS::FER(double SINR, int MCS)//误块率，TB传输出错概率
 {
 	double Frame_Error_Rate = 1;
 	double ESINR_L = SINR; // linear value

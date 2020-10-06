@@ -93,6 +93,7 @@ public:
 	int realisticFeedback; // 0: Ideal, 1: Realistic	
 	int realisticChannelEstimation; // 0: Ideal, 1: Realistic
 	double dataSize;
+	arma::imat resource_used;//nums_BS*RB,记录每个基站使用的资源
 
 	void Initialize(string fileName); // Scheduling initialization
 	void FrameStructure(SLS::TDDType tddtype); // MS feedback
@@ -100,6 +101,7 @@ public:
 	void Feedback(); // MS feedback
 	void Schedule(); // Scheduling
 	void ReceivedSINRCalculation();
+	void Reset();
 	void Conclude(); // Simulation conclusion
 	void ConcludeIteration(); // Iteration conclusion 	
 

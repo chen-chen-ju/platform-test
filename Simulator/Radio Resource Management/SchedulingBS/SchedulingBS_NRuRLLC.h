@@ -54,7 +54,7 @@ class SchedulingBS
 public:
 	int id; // BS ID
 	int scheduledMS; // Scheduled MS
-	arma::mat scheduledUMS; // Scheduled MS size(RB*CB)
+	arma::mat scheduledUMS; // Scheduled MS size(RB*num_ums)
 	int numScheduledMS;
 	int numScheduledUMS; //UMS->URLLC MS
 	map <int, vector <int> > allocationMapUMS; //资源分配，第一个对应UMSID，第二个对应使用的RBID
@@ -62,7 +62,8 @@ public:
 	arma::vec RB_belong;//RB的使用情况，-1表示被UMS占用不可抢占，大于0表示使用该RB的MS序号
 	vector<int> RB_belongMS;//被MS使用的RB序列
 	vector<int> RB_free;//未被使用的RB
-	
+
+	map <int, vector<Packet> > TB;//记录每个用户传输的packet序列
 
 	double downlinkBuffer;
 	double uplinkBuffer;

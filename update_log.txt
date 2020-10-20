@@ -7,3 +7,7 @@
 2020/10/05 在SchedulingBS的reset中增加了TB的清空和空间释放，修改了SystemSim的reset函数的流程；
 	在PeformingMS中，将需要重传的TB重新放回MS的Packet缓存的头部，优先进行传输。相应修改了PeformingBS的Measure函数；
 	在Scheduling_NRuRLLC.h中增加了成员变量resource_used，记录每个基站使用的资源，以便后续计算干扰。
+2020/10/15 在SchedulingBS中增加ratio成员，记录功率分配的比例。作为参数，在SchedulingMS的ReceivedSINR()函数中进行功率计算。
+	在SchedulingMS中，修改了Feedback()函数，使得在TTI不为0时，上报的SINR是根据上一个TTI的资源分配情况，更符合实际传输的信道状况。
+2020/10/20 在3DSpatialChannelModel_NRuRLLC的Pathloss函数中，在用概率losProbability判断是否为LOS，对MS[src]->channel->channelCondition进行更新，否则会一直处于LOS状态，使得只要MS[src]->network->location是outdoor就有直射径。因为过程是按照site顺序进行的，不需要使用列表式存储UE对所有BS的condition状况，使用单变量进行重复利用即可，可以提高内存利用率。
+ 	重点！！！在ChannelMS_NRuRLLC的DiscreteFourierTransform函数中，原先使用的是MS[src]->channel->HtLOS[si, pr]来获取用户到不同基站的LOS系数，经测试，该方法随着si变化，始终只能得到si=0情况时的LOS信道参数，有问题。改为MS[src]->channel->HtLOS(si, pr)后就能解决，但此问题好像是和变量格式有关。因为对于RSRP()函数中的cluster_P_1变量、RSRP变量这种向量形式都没有此问题(某一维度大小是1)。

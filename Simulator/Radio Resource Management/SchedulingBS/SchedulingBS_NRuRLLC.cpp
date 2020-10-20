@@ -60,6 +60,7 @@ void SchedulingBS::Initialize(int bs)
 		RB_belong(i) = -1;
 		RB_free.push_back(i);
 	}
+	ratio.resize(Sim.scheduling->numRB);
 	
 }
 
@@ -134,7 +135,7 @@ void SchedulingBS::Schedule(int bsID)
 		{
 			vector<int> reuse = allocationMapUMS.find(umsID)->second;//UMS的资源重新可用,放入空闲资源中
 			//vec3.insert(vec3.end(),vec1.begin(),vec1.end()); 合并vector
-			RB_free.insert(RB_free.end(), reuse.begin(), reuse.end());
+			RB_free.insert(RB_free.begin(), reuse.begin(), reuse.end());//修改了，使得RB_free里可用资源按升序排列
 			for (vector<int>::iterator iter = reuse.begin(); iter != reuse.end(); iter++)
 			{
 				RB_belong[*iter] = -1; //资源重新标识为可用
@@ -244,6 +245,7 @@ void SchedulingBS::Schedule(int bsID)
 	//给MS分配资源
 	if (Sim.OFDM==0) 
 	{
+		//ratio;
 		if (RB_free.size() > 0)
 		{
 			int num_MS = BS[bsID]->channel->NumAssociatedMS;
@@ -263,7 +265,7 @@ void SchedulingBS::Schedule(int bsID)
 			{
 				int msID = BS[bsID]->network->attachedMS[index[j]]; //MS ID
 				MS[msID]->scheduling->downlinkESINR;
-				if (MS[msID]->scheduling->msBuffer > 0) //有数据要传
+				if (MS[msID]->scheduling->msBuffer > 0 && MS[msID]->scheduling->MCS != -1) //有数据要传
 				{
 					int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->scheduling->msBuffer);
 
@@ -325,7 +327,14 @@ void SchedulingBS::Schedule(int bsID)
 								}
 								TB.insert(newTB);
 							}
-							
+
+							//平均分配功率
+							int size = RB_belongMS.size();
+							for (int i = 0; i < size; i++)
+							{
+								int re_id = RB_belongMS[i];
+								ratio[re_id] = (double) (1.0/size);
+							}
 							cout << "BS" << id << "无可用RB了" << endl;
 							delete[] index;
 							return;
@@ -340,11 +349,17 @@ void SchedulingBS::Schedule(int bsID)
 					}
 					TB.insert(newTB);
 
+					//平均分配功率
+					int size = RB_belongMS.size();
+					for (int i = 0; i < size; i++)
+					{
+						int re_id = RB_belongMS[i];
+						ratio[re_id] = (double)(1.0 / size);
+					}
+
 					MS[msID]->performance->packet++;//统计TB个数
 					allocationMapMS.insert(newMap);
 				}
-				
-
 			}
 			
 			delete[] index; //析构动态数组
@@ -677,11 +692,14 @@ void SchedulingBS::Reset(int BSID)
 	allocationMapMS.erase(allocationMapMS.begin(), allocationMapMS.end());
 	//RB_belongMS.clear();
 	int flag = RB_belongMS.size();
-	for (int i = 0; i < flag; i++)
+
+	//修改后，保证可用资源是按序号升序排序
+	for (int i = flag-1; i>=0; i--)
 	{
-		RB_free.push_back(RB_belongMS[0]);
-		RB_belong(RB_belongMS[0]) = -1;
-		RB_belongMS.erase(RB_belongMS.begin());
+		RB_free.insert(RB_free.begin(),RB_belongMS[i]);
+		RB_belong(RB_belongMS[i]) = -1;
+		ratio[RB_belongMS[i]] = 0;
+		RB_belongMS.erase(RB_belongMS.begin()+i);
 	}
 	//清空TB,释放空间
 	//vector<Packet> vecEmpty;
@@ -691,7 +709,6 @@ void SchedulingBS::Reset(int BSID)
 	{
 		MS[MSID]->scheduling->Reset(MSID);
 	}
-	
 }
 
 void SchedulingBS::ConcludeIteration()

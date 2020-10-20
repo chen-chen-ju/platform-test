@@ -50,6 +50,8 @@ void ChannelMS::Initialize(int msID)
 	antennaOrientation(0, 0) = arma::randu() * 360 * PI / 180;
 	antennaOrientation(1, 0) = 90.0*PI / 180;
 	antennaOrientation(2, 0) = 0;
+	pathloss.zeros(19);
+	AtennaGain.zeros(57);
 	//cout << channelCondition << endl; //没有初始化，默认为0，有LOS径
 	//complex<double> vector;
 
@@ -117,7 +119,10 @@ void ChannelMS::ShortTermChannel(int msID) {
 void ChannelMS::GeneralParameters(int msID, int site) {
 	SpatialChannel spatialChannel;
 	spatialChannel.Initialize();
-	MS[msID]->channel->distance2D = spatialChannel.Distance2D(MS[msID]->network->pos3D(0, 0), MS[msID]->network->pos3D(0, 1), MS[msID]->network->wraparoundposBS(site, 0), MS[msID]->network->wraparoundposBS(site, 1));
+	//if (msID == 6 && site == 2)
+		//cout << MS[msID]->network->wraparoundposBS(site, 0) << "  " << MS[msID]->network->wraparoundposBS(site, 1) << endl;
+
+	MS[msID]->channel->distance2D = spatialChannel.Distance2D(MS[msID]->network->pos3D(0, 0), MS[msID]->network->pos3D(0, 1), MS[msID]->network->wraparoundposBS(site, 0), MS[msID]->network->wraparoundposBS(site, 1));//距离有问题
 	MS[msID]->channel->distance3D = spatialChannel.Distance3D(MS[msID]->network->pos3D(0, 0), MS[msID]->network->pos3D(0, 1), MS[msID]->network->pos3D(0, 2), MS[msID]->network->wraparoundposBS(site, 0), MS[msID]->network->wraparoundposBS(site, 1), MS[msID]->network->wraparoundposBS(site, 2));
 
 	// cout << "Pathloss calculated" << endl;
@@ -147,16 +152,37 @@ void ChannelMS::CoefficientGeneration(int msID, int bsID, int site, int sector) 
 	RSRP(msID, bsID, site, sector);
 }
 
+/*
+void ChannelMS::antennagain(int src, int dst, int site, int sector)//9.17 增加,3扇区的区别,定向天线增益
+{
+
+	double x0 = MS[src]->network->pos3D(0, 0);
+	double y0 = MS[src]->network->pos3D(0, 1);
+	//MS[msID]->network->wraparoundposBS(site, 0)AtennaGain
+	double x1 = MS[src]->network->wraparoundposBS(site, 0);
+	double y1 = MS[src]->network->wraparoundposBS(site, 1);
+	double theta = atan2(y0 - y1, x1 - x0)-Sim.network->sectorAngle[sector];
+	double th = sqrt(5.0 / 3.0) * 70;
+	double gaindB;
+	if (abs(theta) >= th)
+		gaindB = -20;
+	else
+		gaindB = -12 * pow(theta/th, 2);
+	MS[src]->channel->AtennaGain(dst) = gaindB;
+}
+*/
+
 void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 	double muXPR, sigmaXPR;
 	SpatialChannel spatialChannel;
 	spatialChannel.Initialize();
 
+	//channelCondition没有初始化，所有都默认为LOS 
 	switch (Sim.channel->ChannelModel)
 	{
 	case SLS::DenseUrban:
 	
-		if ((MS[src]->network->location == Outdoor) && (MS[src]->channel->channelCondition == LOS)) { // Outdoor LOS
+		if ((MS[src]->network->location == Outdoor) && (MS[src]->channel->channelCondition == LOS)) { 
 			muXPR = spatialChannel.UrbanMacroCellLOS.muXPR;
 			sigmaXPR = spatialChannel.UrbanMacroCellLOS.sigmaXPR;
 		}
@@ -267,7 +293,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 
 	cluster_P_1 = MS[src]->channel->realClusterPowersForLOS;
 	if ((MS[src]->network->location == Outdoor) && (MS[src]->channel->channelCondition == LOS)) K_R1 = kR;
-	else K_R1 = 0.0;
+	else K_R1 = 0.0;//indoor没有直射径
 	int abb = 0;
 
 
@@ -317,6 +343,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 
 
 	for (int n = 0; n < numRealCluster; n++) {
+		//cout << cluster_P_1[n] << endl;
 		for (int m = 0; m < numRay; m++) {
 			F_rx_smallUH = MS[src]->channel->SmallScaleReceiverAntennaGainUH(n, m);
 			F_rx_smallUV = MS[src]->channel->SmallScaleReceiverAntennaGainUV(n, m);
@@ -335,6 +362,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 
 			for (int processIndex = 0; processIndex < numProcess; processIndex++) {
 				for (int u = 0; u < numRxAntenna; u++) {
+					//不同sector，两个角度值不同
 					if ((Sim.channel->BsAntennaModel == CHANNEL::UniformLinearArray) && (Sim.channel->MsAntennaModel == CHANNEL::UniformLinearArray))
 						alpha_nmup_temp(processIndex)(n, m) = sqrt(cluster_P_1[n] / (20.0f * (K_R1 + 1.0)))*(F_rx_smallUV(0, 0) * exp(Big_pi_NLOS_thetatheta) * F_tx_smallUV(0, 0));
 					else if ((Sim.channel->BsAntennaModel == CHANNEL::CrossPolarization) && (Sim.channel->MsAntennaModel == CHANNEL::UniformLinearArray)) {
@@ -353,6 +381,8 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 					}
 
 					Alpha_nmup(u, processIndex) = Alpha_nmup(u, processIndex) + pow(abs(alpha_nmup_temp(processIndex)(n, m) * exp(MS[src]->channel->F_urd(n, m)(u, 0))), 2.0);//这个公式是什么?
+					//cout << pow(abs(exp(MS[src]->channel->F_urd(n, m)(u, 0))), 2.0) << endl; //F_urd(n, m)总为1
+					//cout<< pow(abs(alpha_nmup_temp(processIndex)(n, m)), 2.0) <<endl;//不同sector 此值不同
 				}
 
 				if (n == 0 || n == 1) {
@@ -375,20 +405,24 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 			MS[src]->channel->VelocityBS(dst) = velocity;
 		}
 	}
-
-	double couplingLoss = pow(10.0, -MS[src]->channel->pathloss(site) / 10.0) * pow(10.0, -MS[src]->channel->largeScaleParameter(0, 0) / 10.0)* pow(10, (Sim.channel->NRuRLLC.txPower / 10.0));
+	if (src == 20)
+		int t = MS[src]->channel->channelCondition;
+	//antennagain(src, dst, site, sector);
+	double pathloss = -MS[src]->channel->pathloss(site);
+	double large = -MS[src]->channel->largeScaleParameter(0, 0);
+	double couplingLoss = pow(10.0, pathloss / 10.0) * pow(10.0, large / 10.0)* pow(10, (Sim.channel->NRuRLLC.txPower / 10.0));
 	MS[src]->channel->CouplingLoss(dst) = couplingLoss;
-
+	double distance2D = spatialChannel.Distance2D(MS[src]->network->pos3D(0, 0), MS[src]->network->pos3D(0, 1), MS[src]->network->wraparoundposBS(site, 0), MS[src]->network->wraparoundposBS(site, 1));
 	for (int processIndex = 0; processIndex < numProcess; processIndex++) {
-		alpha_sum[processIndex] = 0.0;
+		alpha_sum(processIndex) = 0.0;
 		for (int u = 0; u < numRxAntenna; u++) {
 			//Alpha_zero只乘了f_urd；Alpha_nmup是乘上f_urd的平方
-			alpha_sum[processIndex] = alpha_sum[processIndex] + pow(abs(Alpha_zero(u, processIndex)), 2.0) + Alpha_nmup(u, processIndex);
+			alpha_sum(processIndex) = alpha_sum(processIndex) + pow(abs(Alpha_zero(u, processIndex)), 2.0) + Alpha_nmup(u, processIndex);
 		}
-		RSRP[processIndex] = couplingLoss * alpha_sum[processIndex](0, 0) / numRxAntenna / numProcess; //单接收天线单处理过程
+		RSRP(processIndex) = couplingLoss * alpha_sum(processIndex)(0, 0) / numRxAntenna / numProcess; 
 	}
-
-	RSRP_cal(3 * site + sector) = RSRP[0];
+	double rsrp = RSRP(0);
+	RSRP_cal(3 * site + sector) = RSRP(0);
 
 	MS[src]->channel->Alpha_zero_temp(dst) = alpha_zero_temp;
 	MS[src]->channel->Alpha_zero_temp_x(dst, 0) = alpha_zero_temp_x;
@@ -413,6 +447,7 @@ void ChannelMS::ChannelCoefficient(int src) {
 	arma::field<arma::cx_mat> alpha_zero_temp_x = MS[src]->channel->Alpha_zero_temp_x;
 	arma::field<arma::cx_mat> alpha_zero_temp1 = MS[src]->channel->Alpha_zero_temp1;
 	arma::field<arma::cx_mat> alpha_zero_temp_x1 = MS[src]->channel->Alpha_zero_temp_x1;
+	
 
 	arma::field<arma::cx_mat> F_urd_LOS = MS[src]->channel->F_urd_LOS;
 	arma::field<arma::cx_mat> F_prd_LOS = MS[src]->channel->F_prd_LOS;
@@ -421,19 +456,19 @@ void ChannelMS::ChannelCoefficient(int src) {
 
 
 	arma::field<arma::cx_mat> SI_H_t_los(SLS_MAX_BS, 1); //捞芭尔
-	arma::field<arma::cx_mat> SI_H_t(SLS_MAX_BS, numProcess, MAX_CLUSTER); //捞芭 process 瘤快扁
+	arma::field<arma::cx_mat> SI_H_t(SLS_MAX_BS, numProcess, MAX_CLUSTER+4); //捞芭 process 瘤快扁
 	MS[src]->channel->HtLOS = arma::field<arma::cx_mat>(Sim.network->numBS, 1);
-	MS[src]->channel->Ht = arma::field<arma::cx_mat>(Sim.network->numBS, 1, MAX_CLUSTER);
+	MS[src]->channel->Ht = arma::field<arma::cx_mat>(Sim.network->numBS, 1, MAX_CLUSTER+4);//+4
 
 
 	for (int bsIndex = 0; bsIndex < SLS_MAX_BS; bsIndex++) {
 		SI_H_t_los(bsIndex, 0).zeros(numRxAntenna*numPort, 1);
 		MS[src]->channel->HtLOS(bsIndex, 0).zeros(numRxAntenna*numPort, 1);
 	}
-
+	//初始化修改
 	for (int siIndex = 0; siIndex < Sim.network->numBS; siIndex++) {
 		for (int processIndex = 0; processIndex < numProcess; processIndex++) {
-			for (int n = 0; n < MAX_CLUSTER; n++) {
+			for (int n = 0; n < MAX_CLUSTER+4; n++) {
 				SI_H_t(siIndex, processIndex, n).zeros(numRxAntenna*numPort, MAX_RAY);
 				MS[src]->channel->Ht(siIndex, processIndex, n).zeros(numRxAntenna*numPort, MAX_RAY);
 			}
@@ -473,12 +508,15 @@ void ChannelMS::ChannelCoefficient(int src) {
 						else
 							SI_H_t_los(siIndex, processIndex)(u*numProcess + p, 0) = alpha_zero_temp_x1(dst)(processIndex) * exp(F_urd_LOS(dst)(u)) * exp(F_prd_LOS(dst)(p));
 					}
+					//if (src == 20)
+						//cout << SI_H_t_los(siIndex, processIndex)(u * numProcess + p, 0)<<"   ";
 
 					MS[src]->channel->HtLOS(siIndex, processIndex)(u*numProcess + p, 0) = SI_H_t_los(siIndex, processIndex)(u*numProcess + p, 0); //LOS 信道系数
 				}
 			}
 		}
-
+		//if (src == 20)
+			//MS[src]->channel->HtLOS(siIndex, 0).print();
 
 		arma::field<arma::cx_mat> Alpha_nmup_temp = MS[src]->channel->Alpha_nmup_temp;
 		arma::field<arma::cx_mat> Alpha_nmup_temp1 = MS[src]->channel->Alpha_nmup_temp1;
@@ -489,7 +527,8 @@ void ChannelMS::ChannelCoefficient(int src) {
 		//int num_clst;
 		for (int processIndex = 0; processIndex < numProcess; processIndex++) {
 			int clst = 0;
-			for (int n = 0; n < NumRealCluseter(dst); n++) {
+			int number = NumRealCluseter(dst);
+			for (int n = 0; n < number; n++) {
 				for (int m = 0; m < 20; m++) {
 					for (int u = 0; u < numRxAntenna; u++) {
 						for (int p = 0; p < numPort; p++) {
@@ -782,12 +821,23 @@ void ChannelMS::ApplyPathLossAndShadowing(int src) {
 			//cout<< MS[src]->channel->Ht(si, 0, n)(0, 0) <<endl;
 			//double abs = pow(MS[src]->channel->Ht(si, 0, n)(0, 0).real(), 2) + pow(MS[src]->channel->Ht(si, 0, n)(0, 0).imag(), 2);
 			//cout <<5*log10(abs) << endl;
-			MS[src]->channel->Ht(si, 0, n) = (MS[src]->channel->CouplingLoss(dst)) * MS[src]->channel->Ht(si, 0, n);//Ht(基站序号,processIndex，子簇序号)
+			//complex<double>  loss = MS[src]->channel->CouplingLoss(dst);
+			MS[src]->channel->Ht(si, 0, n) = MS[src]->channel->CouplingLoss(dst) * MS[src]->channel->Ht(si, 0, n);//Ht(基站序号,processIndex，子簇序号)
+			//if (n>=3 && n < 6 && si==0)
+				//MS[src]->channel->Ht(si, 0, n).print();
 			//y = y + MS[src]->channel->Ht(si, 0, n)*MS[src]->channel->Ht(si, 0, n).t();
 			//y = MS[src]->channel->Ht(si, 0, n)*MS[src]->channel->Ht(si, 0, n).t();
 			//y.print();
 		}
+		complex<double>  loss = MS[src]->channel->CouplingLoss(dst);
 		MS[src]->channel->HtLOS(si,0) = (MS[src]->channel->CouplingLoss(dst)) * MS[src]->channel->HtLOS(si,0);//原先注释了，导致LOS信道系数没有乘上衰落系数，数值特别大
+		/*
+		if (src == 20)
+		{
+			MS[src]->channel->HtLOS[si, 0].print();//只能得到（0，0）处的值！好像只有HtLOS有此问题
+			MS[src]->channel->HtLOS(si, 0).print();
+		}
+		*/
 		//cout << MS[src]->channel->channelCondition << endl;
 		//MS[src]->channel->HtLOS(si, 0).print(); //在有LOS径的情况下，有一些LOS信道系数为0，为什么? 因为indoor概率为0.8
 		//y = y+ MS[src]->channel->HtLOS(si, 0)*MS[src]->channel->HtLOS(si, 0).t();
@@ -809,12 +859,14 @@ void ChannelMS::DftParameterSetting(int src)
 		for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++)
 		{
 			MS[src]->channel->DftParameter(si, c).zeros(1, MAX_CLUSTER + 4);
-			int f = 213 + c * 12 + 6;//4GHZ 
+			//int f = 213 + c * 12 + 6;//4GHZ 感觉应该是19975*12+c*12
+			int f = 19975 * 12 + c * 12;//4GHz
 			int abb1 = 0;
 			for (int n = 0; n < MS[src]->channel->NumRealCluseter(siIndex); n++) {
 				if (n == 0 || n == 1) {
 					std::complex<double> dft, dft1, dft2;
 					if ((MS[src]->network->location == Outdoor) && (MS[src]->channel->channelCondition == LOS)) {
+						//double t = MS[src]->channel->tauLOS(siIndex)(n);
 						dft.real(0.0);
 						dft.imag(-2.0 * PI*double(f)*MS[src]->channel->tauLOS(siIndex)(n) * 15360000.0 / 1024.0);
 						dft1.real(0.0);
@@ -842,6 +894,7 @@ void ChannelMS::DftParameterSetting(int src)
 						dft.real(0.0);
 						dft.imag(-2.0 * PI*double(f)*MS[src]->channel->tauLOS(siIndex)(n) * 15360000.0 / 1024.0);
 					}
+
 					else {
 						dft.real(0.0);
 						dft.imag(-2.0 * PI*double(f)*MS[src]->channel->tau(siIndex)(n) * 15360000.0 / 1024.0);
@@ -865,7 +918,6 @@ void ChannelMS::DiscreteFourierTransform(int src)
 	arma::cx_mat tmpp;
 	tmpp.zeros(Sim.channel->NumberOfReceiveAntennaPort*Sim.channel->NumberOfTransmitAntennaPort, 1);
 	std::complex<double> vt(0.0, 0.0);
-	//cout << endl;
 	for (int si = 0; si < SLS_MAX_BS; si++) {
 		y.zeros(1, 1);
 		h_k.zeros(Sim.channel->NumberOfReceiveAntennaPort*Sim.channel->NumberOfTransmitAntennaPort, MAX_CLUSTER + 4);
@@ -890,10 +942,27 @@ void ChannelMS::DiscreteFourierTransform(int src)
 				if (n == 0) //lysian部分
 				{
 					vt.real(0.0);
-					vt.imag(2.0 * PI*MS[src]->channel->VelocityLOS[siIndex] * double(Sim.TTI) / 1000.0);
-					h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS[si, pr] * exp(vt);//HtLOS很大
+					vt.imag(2.0 * PI*MS[src]->channel->VelocityLOS(siIndex) * double(Sim.TTI) / 1000.0);
+					
+					if (src == 20 && si<3)
+					{
+						h_k.col(n).print();
+						cout << endl;
+						MS[src]->channel->HtLOS(si, pr).print();
+						cout << endl;
+						complex<double> t=exp(vt);
+					}
+					
+					h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr) * exp(vt);//HtLOS很大
 					//h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr);
 				}
+				/*
+				if (n == 0 && si<3)
+				{
+					MS[src]->channel->HtLOS(si, pr,0).print();
+					int t = MS[src]->network->location;
+				}
+				*/
 			}
 			/*
 			if (MS[src]->channel->HtLOS[si, pr](0, 0).real() > 0.001)
@@ -905,8 +974,15 @@ void ChannelMS::DiscreteFourierTransform(int src)
 			//h_k.print();
 			//cout << endl;
 			for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++) {
-				//MS[src]->channel->DftParameter(si, c).print();
-				//cout << endl;
+				
+				/*
+				if (MS[src]->network->location == 0 && si < 3 && c<2)
+				{
+					cout << "时域信号" << endl;
+					h_k.print();
+					cout << endl;
+				}
+				*/
 				tmpp = MS[src]->channel->DftParameter(si, c) * strans(h_k);
 				MS[src]->channel->FrequencyChannel(si, pr, c).zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
 

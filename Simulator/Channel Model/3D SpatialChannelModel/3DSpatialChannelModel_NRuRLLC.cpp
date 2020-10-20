@@ -998,7 +998,14 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 		srcZ = UMS[src]->network->pos3D(2);
 		indoorDistance2D = UMS[src]->network->indoorDistance2D; // indoor ue case 0~25, outdoor 0
 	}
-	
+	if (src == 20)
+		int t =1;
+	/*
+	if (src == 7 && dst == 2)
+		int t = 1;
+	else if (src == 7 && dst == 15)
+		int t = 2;
+	*/
 	double dstZ = BS[dst]->network->pos3D(2);
 	double breakPointDistance2D = 4.0 * (dstZ - 1.0) * (srcZ - 1.0) * (Sim.channel->NRuRLLC.carrierFrequency*1e9) / 3e8;
 
@@ -1037,10 +1044,17 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 		losProbability = 18.0 / outdoorDistance2D + exp(-outdoorDistance2D / 63.0) * (1 - (18.0 / outdoorDistance2D)) * (1 + C * 5 / 4 * pow(outdoorDistance2D / 100, 3) * exp(-outdoorDistance2D / 150));
 	}
 	double pathloss=0;
-	if (arma::randu() > losProbability)
+	double pro = arma::randu();
+	if (pro > losProbability)
+	{
 		pathloss = pathlossNLOS;
+		MS[src]->channel->channelCondition = NLOS;//不需要用数组，每次是覆盖的
+	}
 	else
+	{
 		pathloss = pathlossLOS;
+		MS[src]->channel->channelCondition = LOS;
+	}
 	//自己加的
 	if (type == 0)
 	{
@@ -1074,8 +1088,8 @@ void SpatialChannel::Delay(int src, int type) {
 	//包含LOS径的时延补偿
 	double temp;
 	double rTau, numCluster;
-	arma::mat tauPrime(UrbanMacroCellLOS.numberOfClusters, 1);
-	arma::mat tau(UrbanMacroCellLOS.numberOfClusters, 1);
+	//arma::mat tauPrime(UrbanMacroCellLOS.numberOfClusters, 1);
+	//arma::mat tau(UrbanMacroCellLOS.numberOfClusters, 1);
 	temp = SLS_INFINITY;
 
 	if ((location == Outdoor) && (channelCondition == LOS)) { // Outdoor LOS
@@ -1090,6 +1104,9 @@ void SpatialChannel::Delay(int src, int type) {
 		rTau = UrbanMacroCellOtoI.delayScalingParameter;
 		numCluster = UrbanMacroCellOtoI.numberOfClusters;
 	}
+
+	arma::mat tauPrime(numCluster, 1);
+	arma::mat tau(numCluster, 1);
 
 	for (int n = 0; n < numCluster; n++) {
 
@@ -1347,6 +1364,7 @@ void SpatialChannel::ArrivalAndDepartureAngle(int src, int dst, int site, int se
 	arrivalAngleGCS(0, 0) = AzimuthAngleOfGlobalCoordinateSystem(pos3D(0, 0), pos3D(1), wraparoundposBS(site, 0), wraparoundposBS(site, 1));
 	arrivalAngleGCS(1, 0) = ZenithAngleOfGlobalCoordinateSystem(pos3D(0), pos3D(1), pos3D(2), wraparoundposBS(site, 0), wraparoundposBS(site, 1), wraparoundposBS(site, 2));
 
+	//根据扇区不同，得到角度不同
 	if (sector == 0) {
 		arma::mat departureAngleLCS = GlobalCoordinateSystemAngleToLocalCoordinateSystemAngle(Sim.network->sectorDegree.alpha0, Sim.network->beta, Sim.network->gamma, departureAngleGCS);
 		arma::mat arrivalAngleLCS = GlobalCoordinateSystemAngleToLocalCoordinateSystemAngle(Sim.network->sectorDegree.alpha0, Sim.network->beta, Sim.network->gamma, arrivalAngleGCS);

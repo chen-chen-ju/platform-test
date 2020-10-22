@@ -52,6 +52,7 @@ void ChannelMS::Initialize(int msID)
 	antennaOrientation(2, 0) = 0;
 	pathloss.zeros(19);
 	AtennaGain.zeros(57);
+	channelCondition0.resize(19);
 	//cout << channelCondition << endl; //没有初始化，默认为0，有LOS径
 	//complex<double> vector;
 
@@ -405,7 +406,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 			MS[src]->channel->VelocityBS(dst) = velocity;
 		}
 	}
-	if (src == 20)
+	if (src == 3)
 		int t = MS[src]->channel->channelCondition;
 	//antennagain(src, dst, site, sector);
 	double pathloss = -MS[src]->channel->pathloss(site);
@@ -421,8 +422,8 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 		}
 		RSRP(processIndex) = couplingLoss * alpha_sum(processIndex)(0, 0) / numRxAntenna / numProcess; 
 	}
-	double rsrp = RSRP(0);
-	RSRP_cal(3 * site + sector) = RSRP(0);
+	double rsrp = RSRP[0];
+	RSRP_cal(3 * site + sector) = RSRP[0];
 
 	MS[src]->channel->Alpha_zero_temp(dst) = alpha_zero_temp;
 	MS[src]->channel->Alpha_zero_temp_x(dst, 0) = alpha_zero_temp_x;
@@ -943,8 +944,8 @@ void ChannelMS::DiscreteFourierTransform(int src)
 				{
 					vt.real(0.0);
 					vt.imag(2.0 * PI*MS[src]->channel->VelocityLOS(siIndex) * double(Sim.TTI) / 1000.0);
-					
-					if (src == 20 && si<3)
+					/*
+					if (src == 3 && si<3)
 					{
 						h_k.col(n).print();
 						cout << endl;
@@ -952,7 +953,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 						cout << endl;
 						complex<double> t=exp(vt);
 					}
-					
+					*/
 					h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr) * exp(vt);//HtLOS很大
 					//h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr);
 				}
@@ -976,7 +977,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 			for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++) {
 				
 				/*
-				if (MS[src]->network->location == 0 && si < 3 && c<2)
+				if (src==3 && si < 3 && c<2)
 				{
 					cout << "时域信号" << endl;
 					h_k.print();

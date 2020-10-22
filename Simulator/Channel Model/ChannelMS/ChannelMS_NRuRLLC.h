@@ -68,6 +68,7 @@ public:
 	void SmallScaleParameter(int msID, int bsID, int site, int sector);
 	void GeneralParameters(int msID, int site);
 	void CoefficientGeneration(int msID, int bs, int site, int sector);
+	//void antennagain(int src, int dst, int site, int sector);
 	void RSRP(int msID, int bs, int site, int sector);
 	void ChannelCoefficient(int msID);
 	void ApplyPathLossAndShadowing(int msID);
@@ -77,6 +78,7 @@ public:
 // MS specific channel variable
 	enum MS_channelCondition condition;
 	int channelCondition;				// 0=LOS 1=NLOS
+	vector<int> channelCondition0;				// 0=LOS 1=NLOS  改为了vector向量，大小19，表示到每个site是否有直射径。增加是为了输出显示。
 	int associatedBsIndex;
 	int numCluster;
 	int processIndex;
@@ -95,7 +97,8 @@ public:
 
 // MS specific Channel coefficient
 	//double pathloss;
-	arma::mat pathloss;
+	arma::vec pathloss;
+	arma::vec AtennaGain;
 	double maxClusterPower;
 	arma::mat largeScaleParameter;
 	arma::mat delay;

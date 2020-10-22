@@ -998,7 +998,7 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 		srcZ = UMS[src]->network->pos3D(2);
 		indoorDistance2D = UMS[src]->network->indoorDistance2D; // indoor ue case 0~25, outdoor 0
 	}
-	if (src == 20)
+	if (src == 3)
 		int t =1;
 	/*
 	if (src == 7 && dst == 2)
@@ -1048,21 +1048,37 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 	if (pro > losProbability)
 	{
 		pathloss = pathlossNLOS;
-		MS[src]->channel->channelCondition = NLOS;//不需要用数组，每次是覆盖的
+
+		//自己加的，整合
+		if (type == 0)
+		{
+			MS[src]->channel->pathloss(dst) = pathloss;
+			MS[src]->channel->channelCondition = NLOS;//不需要用数组，每次是覆盖的
+			MS[src]->channel->channelCondition0[dst] = NLOS;
+		}
+		else
+		{
+			UMS[src]->channel->pathloss = pathloss;
+			UMS[src]->channel->channelCondition = NLOS;//不需要用数组，每次是覆盖的
+		}
+		
 	}
 	else
 	{
 		pathloss = pathlossLOS;
-		MS[src]->channel->channelCondition = LOS;
-	}
-	//自己加的
-	if (type == 0)
-	{
-		MS[src]->channel->pathloss(dst) = pathloss;
-	}
-	else
-	{
-		UMS[src]->channel->pathloss = pathloss;
+
+		//自己加的，整合
+		if (type == 0)
+		{
+			MS[src]->channel->pathloss(dst) = pathloss;
+			MS[src]->channel->channelCondition = LOS;
+			MS[src]->channel->channelCondition0[dst] = LOS;
+		}
+		else
+		{
+			UMS[src]->channel->pathloss = pathloss;
+			UMS[src]->channel->channelCondition = LOS;
+		}
 	}
 }
 

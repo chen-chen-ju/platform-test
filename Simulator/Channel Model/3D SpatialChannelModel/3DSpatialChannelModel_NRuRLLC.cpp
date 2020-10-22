@@ -1054,7 +1054,7 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 		{
 			MS[src]->channel->pathloss(dst) = pathloss;
 			MS[src]->channel->channelCondition = NLOS;//不需要用数组，每次是覆盖的
-			MS[src]->channel->channelCondition0[dst] = NLOS;
+			MS[src]->channel->channelCondition0[dst] = NLOS;//10.21更新
 		}
 		else
 		{

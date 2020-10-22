@@ -14,5 +14,5 @@
  	重点！！！在ChannelMS_NRuRLLC的DiscreteFourierTransform函数中，原先使用的是MS[src]->channel->HtLOS[si, pr]来获取用户到不同基站的LOS系数。经测试，该方法随着si变化，始终只能得到si=0情况时的LOS信道参数，有问题。
 改为MS[src]->channel->HtLOS(si, pr)后就能解决，但此问题好像是和变量格式有关。因为对于RSRP()函数中的cluster_P_1变量、RSRP变量这种向量形式都没有此问题(某一维度大小是1)。
 	在ChannelMS_NRuRLLC的ChannelCoefficient()函数中，变量SI_H_t和MS[src]->channel->Ht初始化大小应该在原本簇数上加4，即MAX_CLUSTER+4，因为最强两径又被分为3个子簇。相应的，修改MS[src]->channel->Ht的初始化过程。
-2020/10/21 在ChannelMS_NRuRLLC中增加了vector<int> channelCondition0，主要为了输出显示，其他功能与channelCondition重复，后续不需要可以考虑删除。
+2020/10/21 在ChannelMS_NRuRLLC中增加了vector<int> channelCondition0，主要为了输出显示，其他功能与channelCondition重复，后续如果不需要可以考虑删除。
 	相应地，修改了3DSpatialChannelModel_NRuRLLC的Pathloss函数。

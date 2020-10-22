@@ -52,7 +52,7 @@ void ChannelMS::Initialize(int msID)
 	antennaOrientation(2, 0) = 0;
 	pathloss.zeros(19);
 	AtennaGain.zeros(57);
-	channelCondition0.resize(19);
+	channelCondition0.resize(19);//10.21更新
 	//cout << channelCondition << endl; //没有初始化，默认为0，有LOS径
 	//complex<double> vector;
 

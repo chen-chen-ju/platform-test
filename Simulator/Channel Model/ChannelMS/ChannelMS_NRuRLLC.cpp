@@ -52,7 +52,7 @@ void ChannelMS::Initialize(int msID)
 	antennaOrientation(2, 0) = 0;
 	pathloss.zeros(19);
 	AtennaGain.zeros(57);
-	channelCondition0.resize(19);//10.21更新
+	channelCondition0.resize(19);
 	//cout << channelCondition << endl; //没有初始化，默认为0，有LOS径
 	//complex<double> vector;
 
@@ -406,11 +406,12 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 			MS[src]->channel->VelocityBS(dst) = velocity;
 		}
 	}
-	if (src == 3)
-		int t = MS[src]->channel->channelCondition;
+	//if (src == 14)
+		//int t = MS[src]->channel->channelCondition;
 	//antennagain(src, dst, site, sector);
 	double pathloss = -MS[src]->channel->pathloss(site);
 	double large = -MS[src]->channel->largeScaleParameter(0, 0);
+	//double coff = Sim.channel->NRuRLLC.txPower - 10 * log10(2);
 	double couplingLoss = pow(10.0, pathloss / 10.0) * pow(10.0, large / 10.0)* pow(10, (Sim.channel->NRuRLLC.txPower / 10.0));
 	MS[src]->channel->CouplingLoss(dst) = couplingLoss;
 	double distance2D = spatialChannel.Distance2D(MS[src]->network->pos3D(0, 0), MS[src]->network->pos3D(0, 1), MS[src]->network->wraparoundposBS(site, 0), MS[src]->network->wraparoundposBS(site, 1));
@@ -822,8 +823,14 @@ void ChannelMS::ApplyPathLossAndShadowing(int src) {
 			//cout<< MS[src]->channel->Ht(si, 0, n)(0, 0) <<endl;
 			//double abs = pow(MS[src]->channel->Ht(si, 0, n)(0, 0).real(), 2) + pow(MS[src]->channel->Ht(si, 0, n)(0, 0).imag(), 2);
 			//cout <<5*log10(abs) << endl;
-			//complex<double>  loss = MS[src]->channel->CouplingLoss(dst);
-			MS[src]->channel->Ht(si, 0, n) = MS[src]->channel->CouplingLoss(dst) * MS[src]->channel->Ht(si, 0, n);//Ht(基站序号,processIndex，子簇序号)
+			if (src == 20 && si<3 && n<3)
+			{
+				MS[src]->channel->Ht(si, 0, n).print();
+			}
+			complex<double>  loss = MS[src]->channel->CouplingLoss(dst);
+
+			//H应该只能乘上根号的CouplingLoss，因为信号功率正比H平方
+			MS[src]->channel->Ht(si, 0, n) = sqrt(MS[src]->channel->CouplingLoss(dst)) * MS[src]->channel->Ht(si, 0, n);//Ht(基站序号,processIndex，子簇序号)
 			//if (n>=3 && n < 6 && si==0)
 				//MS[src]->channel->Ht(si, 0, n).print();
 			//y = y + MS[src]->channel->Ht(si, 0, n)*MS[src]->channel->Ht(si, 0, n).t();
@@ -831,7 +838,7 @@ void ChannelMS::ApplyPathLossAndShadowing(int src) {
 			//y.print();
 		}
 		complex<double>  loss = MS[src]->channel->CouplingLoss(dst);
-		MS[src]->channel->HtLOS(si,0) = (MS[src]->channel->CouplingLoss(dst)) * MS[src]->channel->HtLOS(si,0);//原先注释了，导致LOS信道系数没有乘上衰落系数，数值特别大
+		MS[src]->channel->HtLOS(si,0) = sqrt(MS[src]->channel->CouplingLoss(dst)) * MS[src]->channel->HtLOS(si,0);//原先注释了，导致LOS信道系数没有乘上衰落系数，数值特别大
 		/*
 		if (src == 20)
 		{
@@ -944,8 +951,8 @@ void ChannelMS::DiscreteFourierTransform(int src)
 				{
 					vt.real(0.0);
 					vt.imag(2.0 * PI*MS[src]->channel->VelocityLOS(siIndex) * double(Sim.TTI) / 1000.0);
-					/*
-					if (src == 3 && si<3)
+					
+					if (src == 20 && si<3)
 					{
 						h_k.col(n).print();
 						cout << endl;
@@ -953,7 +960,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 						cout << endl;
 						complex<double> t=exp(vt);
 					}
-					*/
+					
 					h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr) * exp(vt);//HtLOS很大
 					//h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr);
 				}

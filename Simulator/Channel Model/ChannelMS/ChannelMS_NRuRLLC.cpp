@@ -275,7 +275,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 	arma::field<arma::mat> Alpha_nmup(Sim.channel->NumberOfReceiveAntennaPort, numProcess);
 	arma::mat velocity(MAX_CLUSTER + 4, numRay);
 
-
+	//不同sector的到达角与离开角不同，是覆盖使用的
 	double AngleAODLOS = MS[src]->channel->GCSAOD;
 	double AngleZODLOS = MS[src]->channel->GCSZOD;
 	double AngleAOALOS = MS[src]->channel->GCSAOA;
@@ -284,6 +284,10 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 	double GCSAOD = MS[src]->channel->GCSAOD;
 	double GCSZOA = MS[src]->channel->GCSZOA;
 	double GCSZOD = MS[src]->channel->GCSZOD;
+
+	if (src == 7)
+		int t = MS[src]->channel->channelCondition;
+
 
 	double velocityLOS = 2.0*PI / Sim.channel->WaveLengthOfElectomageneticWave*(sin(PI - AngleZODLOS)*cos(AngleAOALOS)*5.0 / 6.0*sin(MS[src]->network->velocityVertical)*cos(MS[src]->network->velocityHorizontal) + sin(PI - GCSZOD)*sin(GCSAOA)*5.0 / 6.0*sin(MS[src]->network->velocityVertical)*sin(MS[src]->network->velocityHorizontal) + cos(PI - GCSZOD)*5.0 / 6.0*cos(MS[src]->network->velocityVertical));
 	MS[src]->channel->VelocityLOS(dst, 0) = velocityLOS;
@@ -308,7 +312,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 	F_rx_UV = MS[src]->channel->ReceiverAntennaGainLOSUV;
 	F_rx_XH = MS[src]->channel->ReceiverAntennaGainLOSXH;//交叉极化
 	F_rx_XV = MS[src]->channel->ReceiverAntennaGainLOSXV;
-
+	//与扇区相关
 	F_tx_UH = MS[src]->channel->TransmitterAntennaGainLOSUH;
 	F_tx_UV = MS[src]->channel->TransmitterAntennaGainLOSUV;
 	F_tx_XH = MS[src]->channel->TransmitterAntennaGainLOSXH;
@@ -406,8 +410,7 @@ void ChannelMS::RSRP(int src, int dst, int site, int sector) {
 			MS[src]->channel->VelocityBS(dst) = velocity;
 		}
 	}
-	//if (src == 14)
-		//int t = MS[src]->channel->channelCondition;
+	
 	//antennagain(src, dst, site, sector);
 	double pathloss = -MS[src]->channel->pathloss(site);
 	double large = -MS[src]->channel->largeScaleParameter(0, 0);
@@ -823,10 +826,12 @@ void ChannelMS::ApplyPathLossAndShadowing(int src) {
 			//cout<< MS[src]->channel->Ht(si, 0, n)(0, 0) <<endl;
 			//double abs = pow(MS[src]->channel->Ht(si, 0, n)(0, 0).real(), 2) + pow(MS[src]->channel->Ht(si, 0, n)(0, 0).imag(), 2);
 			//cout <<5*log10(abs) << endl;
+			/*
 			if (src == 20 && si<3 && n<3)
 			{
 				MS[src]->channel->Ht(si, 0, n).print();
 			}
+			*/
 			complex<double>  loss = MS[src]->channel->CouplingLoss(dst);
 
 			//H应该只能乘上根号的CouplingLoss，因为信号功率正比H平方
@@ -951,7 +956,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 				{
 					vt.real(0.0);
 					vt.imag(2.0 * PI*MS[src]->channel->VelocityLOS(siIndex) * double(Sim.TTI) / 1000.0);
-					
+					/*
 					if (src == 20 && si<3)
 					{
 						h_k.col(n).print();
@@ -960,7 +965,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 						cout << endl;
 						complex<double> t=exp(vt);
 					}
-					
+					*/
 					h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr) * exp(vt);//HtLOS很大
 					//h_k.col(n) = h_k.col(n) + MS[src]->channel->HtLOS(si, pr);
 				}

@@ -52,25 +52,39 @@ void PerformanceBS::Initialize(int bs)
 
 void PerformanceBS::Measure()
 {
-	map<int, vector <int>>::iterator iter;
 	if (Sim.OFDM == 13)
 	{
+		/*
 		for (int i=0; i<BS[id]->channel->NumAssociatedMS; i++)
 		{
-			vector <int> nu;
 			int msid = BS[id]->network->attachedMS[i];
-			iter = BS[id]->scheduling->allocationMapMS.find(msid);
+			map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapMS.find(msid);
+			map<int, vector <Packet>>::iterator iter0 = BS[id]->scheduling->;
+
 			if (iter != BS[id]->scheduling->allocationMapMS.end())
-				MS[msid]->performance->Measure(iter->second);
+				MS[msid]->performance->Measure(iter->second,iter0->second);
 			else
-				MS[msid]->performance->Measure(nu);
+			{
+				vector <int> nu;
+				vector <Packet> nu0;
+				MS[msid]->performance->Measure(nu,nu0);
+			}
 			throughputMS = throughputMS + MS[msid]->performance->instantThroughput;
 		}
+		*/
+		//从各个用户顺序测量，转化为根据TB，对有进行传输的用户进行测量
+		for (int i = 0; i < BS[id]->scheduling->TB_entity.size(); i++)
+		{
+			TB temp = BS[id]->scheduling->TB_entity[i];
+			int msid = temp.TB_ID;
+			map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapMS.find(msid);
+			MS[msid]->performance->Measure(iter->second, temp);
+		}
 	}
-	for (map<int, vector <int>>::iterator iter0 = BS[id]->scheduling->allocationMapUMS.begin(); iter0 != BS[id]->scheduling->allocationMapUMS.end(); iter0++)
+	for (map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapUMS.begin(); iter != BS[id]->scheduling->allocationMapUMS.end(); iter++)
 	{
-		UMS[iter0->first]->performance->Measure(iter0->second);
-		throughputUMS = throughputUMS + UMS[iter0->first]->performance->instantThroughput;
+		UMS[iter->first]->performance->Measure(iter->second);
+		throughputUMS = throughputUMS + UMS[iter->first]->performance->instantThroughput;
 	}
 
 

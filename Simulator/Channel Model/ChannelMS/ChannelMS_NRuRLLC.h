@@ -78,7 +78,7 @@ public:
 // MS specific channel variable
 	enum MS_channelCondition condition;
 	int channelCondition;				// 0=LOS 1=NLOS
-	vector<int> channelCondition0;				//10.21更新 0=LOS 1=NLOS  改为了vector向量，大小19，表示到每个site是否有直射径。增加是为了输出显示。
+	vector<int> channelCondition0;				// 0=LOS 1=NLOS  改为了vector向量，大小19，表示到每个site是否有直射径。增加是为了输出显示。
 	int associatedBsIndex;
 	int numCluster;
 	int processIndex;

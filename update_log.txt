@@ -17,5 +17,12 @@
 	在ChannelMS_NRuRLLC的ChannelCoefficient()函数中，变量SI_H_t和MS[src]->channel->Ht初始化大小应该在原本簇数上加4，即MAX_CLUSTER+4，因为最强两径又被分为3个子簇。相应的，修改MS[src]->channel->Ht的初始化过程。
 2020/10/21 在ChannelMS_NRuRLLC中增加了vector<int> channelCondition0，主要为了输出显示，其他功能与channelCondition重复，后续如果不需要可以考虑删除。
 	相应地，修改了3DSpatialChannelModel_NRuRLLC的Pathloss函数。
-2020/10/23 修改了ChannelMS_NRuRLLC的ApplyPathLossAndShadowing函数中，增加大尺度衰落系数，只是乘上根号的CouplingLoss。因为有用信号功率为h^2*P。
+2020/10/23 修改了ChannelMS_NRuRLLC的ApplyPathLossAndShadowing函数中，增加大尺度衰落系数，只是乘上根号的CouplingLoss。因为有用信号功率为h^2*P；
 	修改了SchedulingMS，增加了inband的测量（每个RB的测量），加入了成员变量<vector> spectralEfficiency、ESINRdB和inband_mcs。修改了函数Feedback()和ReceivedSINR()，还有相应的初始化。
+2020/10/26 把SchedulingMS的inband_mcs改名为subband_mcs,服从标准的称呼。
+2020/10/27 增加HARQ功能。考虑到重传数据与初始传输数据需要保证TB的大小一致，我们在SLS_NRuRLLC.h中增加了结构体TransBlock来记录TB的信息，包括所属的ms_ID、包含的pdu、TB size、重传次数、mcs和软合并的sinr等信息；
+	在SchedulingMS中，增加了结构体HARQentity，记录每个出错TB的下次可重传的倒计时。增加了vector类型的HARQ缓存区，实现每个用户的多个HARQ进程。在BufferUpdate()中，每次进行buffer时，
+	更新HARQ缓存中所有数据的定时Timer，若第一个数据Timer为0，说明要进行重传；
+	在SchedulingBS中修改了TB的数据类型，使用新的TransBlock类型来记录每个TB；
+	在PerformanceMS和PerformanceBS进行了相应的更改，软合并的SINR放入出错的TB中。
+2020/10/28 修改了SchedulingMS的ReceiveSINR()函数,输入参数TB，将TB的SINR进行软合并。不再使用用户上一次出错的SINR，因为一个用户有8个HARQ进程，需要软合并相应的进程。

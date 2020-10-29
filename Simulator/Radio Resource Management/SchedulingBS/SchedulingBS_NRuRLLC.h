@@ -37,6 +37,7 @@ when		who				what, where, why
 #include "../../Simulation Top/Global/SystemSimConfiguration.h"
 
 
+
 /*-------------------------------------------------------------------------*/
 /*                                                                         */
 /*                             CLASS DECLARATION                           */
@@ -63,7 +64,7 @@ public:
 	vector<int> RB_belongMS;//被MS使用的RB序列
 	vector<int> RB_free;//未被使用的RB
 
-	map <int, vector<Packet> > TB;//记录每个用户传输的packet序列
+	vector<TB> TB_entity;//记录每个用户传输的packet序列
 	vector<double> ratio;//记录功率分配系数，和为1
 
 	double downlinkBuffer;

@@ -54,11 +54,9 @@ void PerformanceMS::Initialize(int ms)
 
 
 
-void PerformanceMS::Measure(vector <int> RB_list, vector <Packet> TB)
+void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 {
-	MS[id]->scheduling->ReceivedSINR();
-	double temp = MS[id]->scheduling->downlinkESINR;
-	//instantThroughput0 = ;
+	
 	if (MS[id]->scheduling->Pi == 1)
 	{
 		instantThroughput = 0;
@@ -74,23 +72,31 @@ void PerformanceMS::Measure(vector <int> RB_list, vector <Packet> TB)
 		}
 		else
 		{
-			double TB_size = MS[id]->scheduling->GetTBsize(MS[id]->scheduling->downlinkspectralEfficiency, num_RB);
-			if (arma::randu() > FER(temp, MS[id]->scheduling->MCS))
+			MS[id]->scheduling->ReceivedSINR(TransBlock);
+			double temp = MS[id]->scheduling->downlinkESINR;
+			double TB_size = TransBlock.TBsize;//MS[id]->scheduling->GetTBsize(MS[id]->scheduling->downlinkspectralEfficiency, num_RB)
+			double val = FER(temp, MS[id]->scheduling->MCS);
+			if (arma::randu() > val)
 			{
 				instantThroughput = TB_size * 1000;
 				instantThroughput0 = 15000*log2(1 + temp);
-				MS[id]->scheduling->msBuffer = MS[id]->scheduling->msBuffer - TB_size;
-				if (MS[id]->scheduling->msBuffer < 0)
-					MS[id]->scheduling->msBuffer = 0;
-				MS[id]->scheduling->HARQeSINR = 0;
-				MS[id]->scheduling->Maxrettime = 0;
+				if (TransBlock.rettime == 0)//除了初传，其他情况都保存在HARQ缓存里
+				{
+					MS[id]->scheduling->msBuffer = MS[id]->scheduling->msBuffer - TB_size;
+					if (MS[id]->scheduling->msBuffer < 0)
+						MS[id]->scheduling->msBuffer = 0;
+				}
+				//MS[id]->scheduling->HARQeSINR = 0;
+				TransBlock.eSINR = 0;
+				//MS[id]->scheduling->Maxrettime = 0;
 			}
 			else
 			{
 				instantThroughput = TB_size * 1000;
 				instantThroughput0 = 0.1;
-				MS[id]->scheduling->HARQeSINR = MS[id]->scheduling->HARQeSINR + temp;
+				//MS[id]->scheduling->HARQeSINR = MS[id]->scheduling->HARQeSINR + temp;
 				error_packet++;
+				/*
 				MS[id]->scheduling->Maxrettime += 1;
 				if (MS[id]->scheduling->Maxrettime > 3) //达到最大重传次数限制
 				{
@@ -104,9 +110,29 @@ void PerformanceMS::Measure(vector <int> RB_list, vector <Packet> TB)
 				{
 					while (!TB.empty())
 					{
-						MS[id]->scheduling->PacketBuffer.push_front(TB.back());//让出错的TB优先重传
+						//MS[id]->scheduling->PacketBuffer.push_front(TB.back());//让出错的TB优先重传
+
 						TB.pop_back();
 					}
+				}
+				*/
+				TransBlock.eSINR = TransBlock.eSINR + temp;
+				if (TransBlock.rettime == 0)
+				{
+					MS[id]->scheduling->msBuffer -= TB_size;
+					if (MS[id]->scheduling->msBuffer < 0)
+						MS[id]->scheduling->msBuffer = 0;
+				}
+				TransBlock.rettime++;
+				if (TransBlock.rettime > 3)
+				{
+					//MS[id]->scheduling->HARQeSINR = 0;
+					//MS[id]->scheduling->Maxrettime = 0;
+				}
+				else
+				{
+					//vector<Packet> temp = TransBlock.pack;
+					MS[id]->scheduling->HARQbuffer.push_back({TransBlock,8});
 				}
 			}
 		}

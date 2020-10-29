@@ -48,18 +48,33 @@ typedef struct {
 
 } MuMimo_Feedback_Parameter;
 
+//新建的HARQ缓存类型
+typedef struct {
+	TB ReTransBlock;
+	//int TBsize;
+	int Timer;
+}HARQentity;
+
 // Scheduling Mobile Station
 class SchedulingMS
 {
 public:
 	int id; // MS ID
-	int MCS;
+	int MCS;//宽带MCS
+	//每个RB上的信息,in_band
+	vector<int> subband_mcs;//带内MCS，每个RB上的SINR情况
+	vector<double>spectralEfficiency;//每个RB上的频谱效率
+	vector<double>ESINRdB;//
+
+	vector<HARQentity> HARQbuffer;
+
 	int interArrivalTime;//数据到达时间间隔（单位是OFDM符号）
 	double msBuffer;
 	double dataSize;
 	int Pi; //1被抢占, 0没有
 	double downlinkaveragedThroghput, uplinkaveragedThroghput;
 	double downlinkspectralEfficiency, uplinkspectralEfficiency;
+	
 	double averageUserPerceviedThroughput;
 	double downlinkBuffer;
 	double uplinkBuffer;
@@ -69,7 +84,7 @@ public:
 	double downlinkESINRdB, uplinkESINRdB;
 	double downlinkESINR, downlinkESINR0, uplinkESINR;
 	double HARQeSINR;
-	int Maxrettime; //最大重传次数
+	int Needret; //需要重传
 	//int Timer; //定时器
 	//新增packet相关操作
 	deque<Packet> PacketBuffer;//RLC SDU包缓存
@@ -80,7 +95,7 @@ public:
 	void BufferUpdate();
 	void Feedback();
 	//void MuMimoFeedback(int msID, int type);
-	void ReceivedSINR();
+	void ReceivedSINR(TB Tran);
 	arma::cx_mat* PrecodingMatrix(enum Precoding_Matrix precodingtype, arma::cx_mat *codebook, int type);
 	double GetSpectralEfficiency(double SINR, int &MCS);
 	int GetTBsize(double SpectralEfficiency, double datasize);

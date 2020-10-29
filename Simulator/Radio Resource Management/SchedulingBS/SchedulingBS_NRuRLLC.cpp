@@ -265,100 +265,133 @@ void SchedulingBS::Schedule(int bsID)
 			{
 				int msID = BS[bsID]->network->attachedMS[index[j]]; //MS ID
 				MS[msID]->scheduling->downlinkESINR;
-				if (MS[msID]->scheduling->msBuffer > 0 && MS[msID]->scheduling->MCS != -1) //有数据要传
+				if (MS[msID]->scheduling->Needret)//需要进行重传
 				{
-					int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->scheduling->msBuffer);
-
 					vector<int> newRB;
 					pair <int, vector <int> > newMap = make_pair(msID, newRB);
-
-					//新增TB
-					vector <Packet> list;
-					pair<int, vector <Packet> > newTB = make_pair(msID, list);
-
-
+					TB temp = MS[msID]->scheduling->HARQbuffer[0].ReTransBlock;
+					int num_RB;
+					MS[msID]->scheduling->Needret = 0;
+					num_RB = min((int)RB_free.size(), num_RB);
+					if (num_RB == 0)
+					{
+						cout << "BS" << id << "无可用RB了" << endl;
+						delete[] index;
+						return;
+					}
 					for (int i = 0; i < num_RB; i++)
 					{
-						if (RB_free.size() > 0) //只能使用空闲的RB资源
-						{
-							Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;//标记使用了该资源，在TTI结束时清除标记
-							
-							newMap.second.push_back(RB_free[0]);
-							RB_belongMS.push_back(RB_free[0]);
-							RB_belong[RB_free[0]] = msID;
-							RB_free.erase(RB_free.begin());
-						}
-						else
-						{
-							if (newMap.second.size() > 0)
-							{
-								MS[msID]->performance->packet++;
-								allocationMapMS.insert(newMap);
+						newMap.second.push_back(RB_free[0]);
+						RB_belongMS.push_back(RB_free[0]);
+						RB_belong[RB_free[0]] = msID;
+						RB_free.erase(RB_free.begin());
+					}
+					MS[msID]->scheduling->HARQbuffer.erase(MS[msID]->scheduling->HARQbuffer.begin());
+				}
+				else
+				{
+					if (MS[msID]->scheduling->msBuffer > 0 && MS[msID]->scheduling->MCS != -1) //有数据要传
+					{
+						int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->scheduling->msBuffer);
 
-								
-								//根据TB大小，切割整合packet
-								uint TBsize = (uint) MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, (int)newMap.second.size());
-								
-								while (TBsize > 0)
+						vector<int> newRB;
+						pair <int, vector <int> > newMap = make_pair(msID, newRB);
+
+						//新增TB
+						vector <Packet> list;
+						TB newTB;
+						newTB.TB_ID = msID;
+						newTB.TBmcs = MS[msID]->scheduling->MCS;
+						newTB.rettime = 0;
+						newTB.eSINR = 0;
+
+						for (int i = 0; i < num_RB; i++)
+						{
+							if (RB_free.size() > 0) //只能使用空闲的RB资源
+							{
+								Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;//标记使用了该资源，在TTI结束时清除标记
+
+								newMap.second.push_back(RB_free[0]);
+								RB_belongMS.push_back(RB_free[0]);
+								RB_belong[RB_free[0]] = msID;
+								RB_free.erase(RB_free.begin());
+							}
+							else
+							{
+								if (newMap.second.size() > 0)
 								{
-									Packet temp = MS[msID]->scheduling->PacketBuffer.front();
-									if (TBsize >= temp.Gettotalsize())
-									{
-										TBsize -= temp.Gettotalsize();
-										newTB.second.push_back(temp);
-										MS[msID]->scheduling->PacketBuffer.pop_front();
-									}
-									else
-									{
-										uint resbit = temp.Gettotalsize() - TBsize;
-										temp.SetSize(TBsize - temp.GetHead());
-										temp.Setdivide(true);
-										temp.Setindex(MS[msID]->scheduling->divide_index[0]);
-										newTB.second.push_back(temp);
+									MS[msID]->performance->packet++;
+									allocationMapMS.insert(newMap);
 
-										temp.SetSize(resbit);
-										//切割剩余部分留在缓存中
-										MS[msID]->scheduling->PacketBuffer.pop_front();
-										MS[msID]->scheduling->PacketBuffer.push_front(temp);
-										//去除使用的切割标记
-										MS[msID]->scheduling->divide_index.erase(MS[msID]->scheduling->divide_index.begin());
-										break;
+									//根据TB大小，切割整合packet
+									int RBsize = (int)newMap.second.size();
+									uint TBsize = (uint)MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, RBsize);
+									newTB.numRB = RBsize;
+									newTB.TBsize = TBsize;
+
+									while (TBsize > 0)
+									{
+										Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+										if (TBsize >= temp.Gettotalsize())
+										{
+											TBsize -= temp.Gettotalsize();
+											newTB.pack.push_back(temp);
+											MS[msID]->scheduling->PacketBuffer.pop_front();
+										}
+										else
+										{
+											uint resbit = temp.Gettotalsize() - TBsize;
+											temp.SetSize(TBsize - temp.GetHead());
+											temp.Setdivide(true);
+											temp.Setindex(MS[msID]->scheduling->divide_index[0]);
+											newTB.pack.push_back(temp);
+
+											temp.SetSize(resbit);
+											//切割剩余部分留在缓存中
+											MS[msID]->scheduling->PacketBuffer.pop_front();
+											MS[msID]->scheduling->PacketBuffer.push_front(temp);
+											//去除使用的切割标记
+											MS[msID]->scheduling->divide_index.erase(MS[msID]->scheduling->divide_index.begin());
+											break;
+										}
 									}
+									TB_entity.push_back(newTB);
 								}
-								TB.insert(newTB);
-							}
 
-							//平均分配功率
-							int size = RB_belongMS.size();
-							for (int i = 0; i < size; i++)
-							{
-								int re_id = RB_belongMS[i];
-								ratio[re_id] = (double) (1.0/size);
+								//平均分配功率
+								int size = RB_belongMS.size();
+								for (int i = 0; i < size; i++)
+								{
+									int re_id = RB_belongMS[i];
+									ratio[re_id] = (double)(1.0 / size);
+								}
+								cout << "BS" << id << "无可用RB了" << endl;
+								delete[] index;
+								return;
 							}
-							cout << "BS" << id << "无可用RB了" << endl;
-							delete[] index;
-							return;
 						}
-					}
 
-					//资源充足，所有packet都放入TB
-					while (!MS[msID]->scheduling->PacketBuffer.empty())
-					{
-						newTB.second.push_back(MS[msID]->scheduling->PacketBuffer.front());
-						MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
-					}
-					TB.insert(newTB);
+						//资源充足，所有packet都放入TB
+						while (!MS[msID]->scheduling->PacketBuffer.empty())
+						{
+							newTB.pack.push_back(MS[msID]->scheduling->PacketBuffer.front());
+							MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+						}
+						newTB.TBsize = (uint)MS[msID]->scheduling->msBuffer;
+						newTB.numRB = (int)newMap.second.size();
+						TB_entity.push_back(newTB);
 
-					//平均分配功率
-					int size = RB_belongMS.size();
-					for (int i = 0; i < size; i++)
-					{
-						int re_id = RB_belongMS[i];
-						ratio[re_id] = (double)(1.0 / size);
-					}
+						//平均分配功率
+						int size = RB_belongMS.size();
+						for (int i = 0; i < size; i++)
+						{
+							int re_id = RB_belongMS[i];
+							ratio[re_id] = (double)(1.0 / size);
+						}
 
-					MS[msID]->performance->packet++;//统计TB个数
-					allocationMapMS.insert(newMap);
+						MS[msID]->performance->packet++;//统计TB个数
+						allocationMapMS.insert(newMap);
+					}
 				}
 			}
 			
@@ -702,8 +735,9 @@ void SchedulingBS::Reset(int BSID)
 		RB_belongMS.erase(RB_belongMS.begin()+i);
 	}
 	//清空TB,释放空间
-	//vector<Packet> vecEmpty;
-	TB.erase(TB.begin(),TB.end());
+	vector<TB> vecEmpty;
+	//TB.erase(TB.begin(),TB.end());
+	TB_entity.swap(vecEmpty);
 	
 	for (int MSID = 0; MSID < BS[BSID]->channel->NumAssociatedMS; MSID++)
 	{

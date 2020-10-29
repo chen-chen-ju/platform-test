@@ -56,7 +56,7 @@ public:
 	double receivedSinr;
 
 	void Initialize(int ms); // Initialization
-	void Measure(vector <int> RB_list); // Throughput measurement
+	void Measure(vector <int> RB_list, TB Transblock); // Throughput measurement
 	double FER(double SINR, int MCS);
 	void ConcludeIteration(); // Iteration conclusion
 	void Conclude(); // Simulation conclusion

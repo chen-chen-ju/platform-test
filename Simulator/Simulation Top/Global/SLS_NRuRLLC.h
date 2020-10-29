@@ -38,6 +38,7 @@ when		who				what, where, why
 /*-------------------------------------------------------------------------*/
 
 #include <math.h>
+#include <deque>
 #include <map>
 #include <vector>
 #include <cstdlib>
@@ -46,6 +47,9 @@ when		who				what, where, why
 #include <string>
 #include <windows.h>
 #include "../../../Simulator/Library/Math/armadillo-7.700.0/include/armadillo"
+#include"../../../Simulator/Simulation Top/Global/Packet.h"
+#include"../../../Simulator/Simulation Top/Global/Mac_Pdu.h"
+//#include"../../../Simulator/Simulation Top/Global/TB.h"
 
 using namespace std;
 
@@ -119,5 +123,18 @@ namespace SLS {
 		HybridTDD
 	}; // Simulation link direction
 }
+
+
+typedef struct TransBlock {
+	int TB_ID;
+	vector<Packet> pack;
+	uint TBsize;
+	int rettime;
+	int numRB;
+	int TBmcs;
+	double eSINR;
+}TB;
+
+
 
 #endif 

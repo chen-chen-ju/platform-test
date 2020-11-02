@@ -1,4 +1,6 @@
-#pragma once
+#ifndef MAC_PDU_H
+#define MAC_PDU_H
+
 #include "packet.h"
 class Mac_Pdu
 {
@@ -30,10 +32,8 @@ private:
 	Packet m_Sdu;
 };
 
-Mac_Pdu::Mac_Pdu(uint Head):m_Head(Head)
-{ 
-	Packet a;
-	m_Sdu = a;
-}
-Mac_Pdu::~Mac_Pdu()
-{ }
+#endif
+
+
+
+

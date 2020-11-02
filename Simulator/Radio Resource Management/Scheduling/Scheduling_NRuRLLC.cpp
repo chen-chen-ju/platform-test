@@ -128,6 +128,7 @@ void Scheduling::Schedule()
 
 void Scheduling::ReceivedSINRCalculation()
 {
+	/*
 	for (int bsID = 0; bsID < Sim.network->numBS; bsID++)
 	{
 		for (int numrb = 0; numrb < Sim.scheduling->numRB; numrb++)
@@ -147,7 +148,7 @@ void Scheduling::ReceivedSINRCalculation()
 		}
 			
 	}
-	
+	*/
 	cout << "[Scheduling]: Received SINR calculation " << endl;
 }
 

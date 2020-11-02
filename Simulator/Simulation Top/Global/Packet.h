@@ -1,16 +1,31 @@
-#pragma once
+#ifndef PACKET_H
+#define PACKET_H
+
 typedef unsigned int uint;
+
+#define Packet_size  264//正常包大小，算上头部
 
 class Packet
 {
 public:
-	Packet( uint Head = 0,
+	Packet(uint ID = 0,
+		uint Head = 8,//RLC层head为8，MAC层head为23
 		bool if_divide = false,
 		int index = 0,
 		uint packet_size = 256,//单位bit
 		double delay = 0 //单位ms
 	);
 	~Packet();
+
+	uint GetID()
+	{
+		return m_ID;
+	}
+	void SetID(uint ID)
+	{
+		m_ID = ID;
+	}
+
 
 	uint GetHead()
 	{
@@ -34,7 +49,7 @@ public:
 	{
 		return m_index;
 	}
-	void SetHeadsize(int index)
+	void Setindex(int index)
 	{
 		m_index = index;
 	}
@@ -52,18 +67,19 @@ public:
 	{
 		return m_delay;
 	}
-	void SetSize(double delay)
+	void Setdelay(double delay)
 	{
 		m_delay = delay;
 	}
 
 	uint Gettotalsize()
 	{
-		return m_packet_size + 8;//8为RLC头大小，RLC只增加了一个时间戳
+		return m_packet_size + m_Head;//8为RLC头大小，RLC只增加了一个时间戳
 	}
 
 private:
-	uint m_Head;
+	uint m_ID;
+	uint m_Head;//头长度
 	int m_if_divide;
 	int m_index;
 	uint m_packet_size;
@@ -71,10 +87,4 @@ private:
 
 };
 
-Packet::Packet(uint Head, bool if_divide, int index, uint packet_size, double delay)
-	:m_Head(Head), m_if_divide(if_divide), m_index(index), m_packet_size(packet_size),m_delay(delay)
-{ }
-
-Packet::~Packet()
-{ }
-
+#endif

@@ -49,6 +49,7 @@ int main()
 	Sim.network->PlaceMacroBS(); // Macro BS placement
 	for (int i = 0; i < Sim.numIteration; i++)
 	{
+		srand(1);
 		Sim.network->PlaceEMBBMS(); // eMBB MS placement (Full buffer)
 		Sim.network->PlaceURLLCMS(); // uRLLC MS placement (non-Full buffer)
 		Sim.network->PlaceWraparound();
@@ -169,14 +170,14 @@ void SystemSim::Demonstration() {
 			double couplingloss = 10.0 * log10(MS[msID]->channel->CouplingLoss(bsID).real());
 			double pathloss = MS[msID]->channel->pathloss(bsID/3);
 			//outFile << "x:  " << BS[bsID]->network->pos3D(0, 0) << "	y:  " << BS[bsID]->network->pos3D(0, 1) << "  z:   " << BS[bsID]->network->pos3D(0, 2) << endl;
-			outFile  <<  msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINR0 << "    " << distance0 << "    " << couplingloss << "    " << pathloss <<endl;
+			outFile  <<  msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 0) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << "    " << MS[msID]->network->location << endl;
 			//outFile << MS[msID]->network->wraparoundposBS(bsID/3, 0) << "	 " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "	 " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << endl;
 		}
 	}
 	outFile.close();
 
 
-	outFile1.open("../../Simulator/Data/Output Data/Scheduled_NuRllc.txt", ios::app);
+	outFile1.open("../../Simulator/Data/Output Data/Scheduled_NuRllc.txt");//, ios::app
 	/*
 	for (int msID = 0; msID < Sim.network->numMS; msID++)
 	{
@@ -187,19 +188,14 @@ void SystemSim::Demonstration() {
 	}
 	*/
 	int id = 0;
-	if ((MS[id]->network->location == Outdoor) && (MS[id]->channel->channelCondition == LOS))
+	for (int msID = 0; msID < Sim.network->numMS; msID++)
 	{
-		for (int n = 0; n < MS[id]->channel->NumRealCluseter(1); n++)
+		//outFile1 << MS[msID]->scheduling->downlinkESINRdB << "	" << MS[msID]->scheduling->MCS << endl;
+		for (int i = 0; i < Sim.network->numBS/3; i++)
 		{
-			outFile1 << MS[id]->channel->tauLOS(1)(n) <<"	"<< endl;
+			outFile1 << MS[msID]->channel->pathloss(i) << "	" << MS[msID]->channel->channelCondition0[i] << "	" << MS[msID]->channel->RSRPout(3 * i + 0, 0) << "	" << MS[msID]->channel->RSRPout(3 * i + 1, 0) << "	" << MS[msID]->channel->RSRPout(3 * i + 2, 0) << endl;
 		}
-	}
-	else
-	{
-		for (int n = 0; n < MS[id]->channel->NumRealCluseter(1); n++)
-		{
-			outFile1 << MS[id]->channel->tau(1)(n) << endl;
-		}
+		outFile1 << endl;
 	}
 
 	outFile1 << endl;

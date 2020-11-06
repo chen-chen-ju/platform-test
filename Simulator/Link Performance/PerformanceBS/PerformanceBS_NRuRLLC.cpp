@@ -52,7 +52,7 @@ void PerformanceBS::Initialize(int bs)
 
 void PerformanceBS::Measure()
 {
-	if (Sim.OFDM == 13)
+	if (Sim.OFDM +Sim.OFDM_shift == 13)
 	{
 		/*
 		for (int i=0; i<BS[id]->channel->NumAssociatedMS; i++)
@@ -83,7 +83,8 @@ void PerformanceBS::Measure()
 	}
 	for (map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapUMS.begin(); iter != BS[id]->scheduling->allocationMapUMS.end(); iter++)
 	{
-		UMS[iter->first]->performance->Measure(iter->second);
+		TB newTB;
+		UMS[iter->first]->performance->Measure(iter->second, newTB);
 		throughputUMS = throughputUMS + UMS[iter->first]->performance->instantThroughput;
 	}
 

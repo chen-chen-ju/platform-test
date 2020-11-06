@@ -54,9 +54,12 @@ public:
 	int packet, error_packet;
 	double receivedSinr;
 	
+	vector<int> delay_status;//记录每个分割序号的使用情况，0代表未被使用；1代表已有一个包到达，等待另一个包到达
+	vector<double> delay_list;//记录每个分割序号的第一个包到达时间
+	double delay;
 
 	void Initialize(int ms); // Initialization
-	void Measure(vector <int> RB_list); // Throughput measurement
+	void Measure(vector <int> RB_list,TB TransBlock); // Throughput measurement
 	double FER(double SINR, int MCS);
 	void ConcludeIteration(); // Iteration conclusion
 	void Conclude(); // Simulation conclusion

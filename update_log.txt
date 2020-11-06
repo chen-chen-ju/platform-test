@@ -26,3 +26,12 @@
 	在SchedulingBS中修改了TB的数据类型，使用新的TransBlock类型来记录每个TB；
 	在PerformanceMS和PerformanceBS进行了相应的更改，软合并的SINR放入出错的TB中。
 2020/10/28 修改了SchedulingMS的ReceiveSINR()函数,输入参数TB，将TB的SINR进行软合并。不再使用用户上一次出错的SINR，因为一个用户有8个HARQ进程，需要软合并相应的进程。
+2020/11/2  修改了PerformanceMS_NRuRLLC。在头文件中增加了vector delay_status 来记录每个分割号的使用情况。等于0代表还未收到使用该分割号的数据包，等于1说明收到一个包使用该分割号；vector delay_list是记录每个分割号第一个包的到达时间-传输时延；
+delay是统计所有包的总时延。
+	在.c文件中，当发现一个包是被分割的，查询状态表delay_status，如果为0，记录该包的到达时间-时延，并将状态更新为1；如果为1，说明该数据包已收齐，计算总时延：第二个包的到达时间减去记录的第一个包时间。同时将状态恢复成0。
+	修改了system_sim,在需要进行CQI上报的时刻，增加了2个OFDM符号偏移。同时修改了Performance的统计时刻
+2020/11/3  修改了SchedulingMS的天线相关部分，有用信道系数H应该除以根号（发射天线数量），因为发射功率均分到了每根发射天线上。
+2020/11/6  在Scheduling_NRuRLLC.h中增加了枚举变量Receive_mode，来实现MIMO的两种接收方式，0是MMSE，1是ZF。相应地，修改了SchedulingMS_NRuRLLC。
+	把结构体HARQentity的定义搬移到SLS_NRuRLLC，以便MS和UMS用户共同使用该参数。
+	在Packet.h中增加了Adddelay()函数,根据操作过程增加包的时延。
+	修改了UMS用户的Scheduling和Performance过程和ChannelMS，还差BS处的调度还没修改。

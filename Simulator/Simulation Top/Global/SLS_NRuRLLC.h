@@ -135,6 +135,11 @@ typedef struct TransBlock {
 	double eSINR;
 }TB;
 
-
+//新建的HARQ缓存类型
+typedef struct HARQentity {
+	TB ReTransBlock;
+	//int TBsize;
+	int Timer;
+}HARQentity;
 
 #endif 

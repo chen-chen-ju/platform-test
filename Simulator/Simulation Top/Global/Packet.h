@@ -71,6 +71,10 @@ public:
 	{
 		m_delay = delay;
 	}
+	void Adddelay(double delay)
+	{
+		m_delay += delay;
+	}
 
 	uint Gettotalsize()
 	{

@@ -104,12 +104,12 @@ void Scheduling::Feedback()
 {
 	for (int msID = 0; msID < Sim.network->numMS; msID++)
 	{
-		MS[msID]->scheduling->Feedback(); // Feedback(msID)
+		MS[msID]->scheduling->Feedback(MMSE); // Feedback(msID)
 	}
 
 	for (int umsID = 0; umsID < Sim.network->numUMS; umsID++)
 	{
-		UMS[umsID]->scheduling->Feedback(); // Feedback(umsID)
+		UMS[umsID]->scheduling->Feedback(MMSE); // Feedback(umsID)
 	}
 
 	setcolor(13, 0);

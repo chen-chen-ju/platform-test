@@ -48,12 +48,8 @@ typedef struct {
 
 } MuMimo_Feedback_Parameter;
 
-//新建的HARQ缓存类型
-typedef struct {
-	TB ReTransBlock;
-	//int TBsize;
-	int Timer;
-}HARQentity;
+
+
 
 // Scheduling Mobile Station
 class SchedulingMS
@@ -93,9 +89,9 @@ public:
 
 	void Initialize(int ms);
 	void BufferUpdate();
-	void Feedback();
+	void Feedback(enum Receive_mode mode);//0是MMSE,1是ZF
 	//void MuMimoFeedback(int msID, int type);
-	void ReceivedSINR(TB Tran);
+	void ReceivedSINR(TB Tran, enum Receive_mode mode);
 	arma::cx_mat* PrecodingMatrix(enum Precoding_Matrix precodingtype, arma::cx_mat *codebook, int type);
 	double GetSpectralEfficiency(double SINR, int &MCS);
 	int GetTBsize(double SpectralEfficiency, double datasize);

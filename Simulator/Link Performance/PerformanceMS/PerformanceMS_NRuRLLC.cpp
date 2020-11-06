@@ -50,6 +50,8 @@ void PerformanceMS::Initialize(int ms)
 	uplinkThroghput = 0;
 	packet = 0;
 	error_packet = 0;
+	delay_status.resize(32);
+	delay_list.resize(32);
 }
 
 
@@ -72,7 +74,7 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 		}
 		else
 		{
-			MS[id]->scheduling->ReceivedSINR(TransBlock);
+			MS[id]->scheduling->ReceivedSINR(TransBlock, MMSE);
 			double temp = MS[id]->scheduling->downlinkESINR;
 			double TB_size = TransBlock.TBsize;//MS[id]->scheduling->GetTBsize(MS[id]->scheduling->downlinkspectralEfficiency, num_RB)
 			double val = FER(temp, MS[id]->scheduling->MCS);
@@ -85,6 +87,36 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 					MS[id]->scheduling->msBuffer = MS[id]->scheduling->msBuffer - TB_size;
 					if (MS[id]->scheduling->msBuffer < 0)
 						MS[id]->scheduling->msBuffer = 0;
+				}
+				vector<Packet>temp = TransBlock.pack;
+				for (auto v : temp)
+				{
+					if (v.Getdivide())
+					{
+						int index = v.Getindex();
+						if (index >= 32)
+							cout << "出错：分割索引号超出预设范围" << endl;
+						else
+						{
+							if (delay_status[index]<0 || delay_status[index] >1)
+								cout << "出错：分割包状态错误" << endl;
+							else if (delay_status[index] == 0)
+							{
+								//第一个包到来,记录接受时刻，并转化状态至接收到一个包
+								delay_list[index] = 14 * Sim.TTI + Sim.OFDM - v.Getdelay();//时延加上了包传输时延
+								delay_status[index] = 1;
+							}
+							else
+							{
+								//两个包都到了，可以整合信息，更新时延
+								delay += 14 * Sim.TTI + Sim.OFDM - delay_list[index] + v.Getdelay();
+								delay_status[index] = 0;
+								//归还使用的分割序号
+								MS[id]->scheduling->index.push_back(index);
+							}
+						}
+						
+					}
 				}
 				//MS[id]->scheduling->HARQeSINR = 0;
 				TransBlock.eSINR = 0;
@@ -124,8 +156,10 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 						MS[id]->scheduling->msBuffer = 0;
 				}
 				TransBlock.rettime++;
-				if (TransBlock.rettime > 3)
+				if (TransBlock.rettime > 3)//超过最大重传限制
 				{
+					for (int i = 0; i < TransBlock.pack.size(); i++)
+						TransBlock.pack[i].Adddelay(8);//增加8个OFDM的传输时延
 					//MS[id]->scheduling->HARQeSINR = 0;
 					//MS[id]->scheduling->Maxrettime = 0;
 				}

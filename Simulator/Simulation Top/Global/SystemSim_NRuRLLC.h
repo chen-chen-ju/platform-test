@@ -50,6 +50,7 @@ public:
 	int numTTI; // # of TTIs for simulation
 	int TTI;
 	int OFDM;
+	int OFDM_shift;//在进行信道估计时，由于CQI占用，产生了OFDM偏移，即前几个TTI无法使用
 	int numSymbolperTTI;
 	int numTTIperFrame;
 	int feedbackPeriod;

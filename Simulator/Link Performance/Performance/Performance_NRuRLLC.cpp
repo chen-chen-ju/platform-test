@@ -72,7 +72,7 @@ void Performance::Conclude()
 
 void Performance::Measure()
 {
-
+	//Sim.scheduling->resource_used.print();
 	for (int i = 0; i < Sim.network->numMS; i++)
 		MS[i]->performance->instantThroughput = 0;
 	for (int i = 0; i < Sim.network->numUMS; i++)
@@ -81,7 +81,7 @@ void Performance::Measure()
 	for (int bsID = 0; bsID < Sim.network->numBS; bsID++)
 	{
 		BS[bsID]->performance->Measure();
-		if (Sim.OFDM == 13)
+		if (Sim.OFDM+Sim.OFDM_shift == 13)
 		{
 			throughputMS += BS[bsID]->performance->throughputMS;
 			throughputUMS += BS[bsID]->performance->throughputUMS;

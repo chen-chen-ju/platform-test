@@ -171,11 +171,22 @@ static const int TransportBlockSizeTable[110][27] = {
 
 void SchedulingURLLCMS::Initialize(int ms) //Network::PlaceURLLCMS()
 {
+	subband_mcs.resize(Sim.scheduling->numRB);
+	spectralEfficiency.resize(Sim.scheduling->numRB);
+	ESINRdB.resize(Sim.scheduling->numRB);
 	id = ms; // MS ID
 	dataSize = Sim.scheduling->dataSize/10;
 	interArrivalTime = ceil(-(1 / Sim.network->meanArrivalTime)*log(1 - arma::randu()) * 10 / 5); // first traffic generation TTI for non-full-buffer MS
 	msBuffer = 0; // buffer initialization 
-	Maxrettime = 0;
+	//Maxrettime = 0;
+	for (uint i = 0; i < 256; i++)
+	{
+		index.push_back(i);
+		if (i < 32)
+		{
+			divide_index.push_back(i);
+		}
+	}
 	Timer = 0;
 }
 
@@ -188,14 +199,47 @@ void SchedulingURLLCMS::Initialize(int ms) //Network::PlaceURLLCMS()
 /*-------------------------------------------------------------------------*/
 void SchedulingURLLCMS::BufferUpdate()
 {
+	if (HARQbuffer.size() > 0)
+	{
+		for (int i = 0; i < HARQbuffer.size(); i++)
+			HARQbuffer[i].Timer--;
+		if (HARQbuffer[0].Timer == 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
+		{
+			Needret = 1;//告诉基站要先重传
+		}
+	}
+
 	if ((14*Sim.TTI+Sim.OFDM == interArrivalTime))
 	{
 		msBuffer = msBuffer + dataSize;
-		interArrivalTime = 14*Sim.TTI + Sim.OFDM + ceil(-(1 / Sim.network->meanArrivalTime)*log(1 - arma::randu()) * 4 * 10 / 5);// * 10 / 5  强度为1的possion分布
+		interArrivalTime = ceil(-(1 / Sim.network->meanArrivalTime)*log(1 - arma::randu()) * 4 * 10 / 5);// * 10 / 5是因为泊松强度为1/2（Sim.network->meanArrivalTime=2）    强度为1的possion分布
 		if (interArrivalTime < 4)
-			interArrivalTime = 4;
-		cout << "ID:  " << id << "  arrivaltime:  " << interArrivalTime << endl;
-		cout << "msBuffer:  " << msBuffer << endl;
+			interArrivalTime = 4;//保证两次数据包间隔大于4个OFDM符号
+		interArrivalTime = interArrivalTime + 14 * Sim.TTI + Sim.OFDM;
+		//cout << "ID:  " << id << "  arrivaltime:  " << interArrivalTime << endl;
+		//cout << "msBuffer:  " << msBuffer << endl;
+
+		//对packet缓存进行操作
+		Packet newpakcket;
+		uint num = (uint)dataSize / newpakcket.GetSize();
+		uint res = (uint)dataSize % newpakcket.GetSize();
+		for (uint i = 0; i < num; i++)
+		{
+			if (index.size() == 0)
+				cout << "警告：缓存区数据包个数超过了256" << endl;
+			newpakcket.SetID(index[0]);//packet的唯一标识
+			index.erase(index.begin());
+			PacketBuffer.push_back(newpakcket);
+		}
+		if (res > 0)//最后一个包可能不是填满的
+		{
+			if (index.size() == 0)
+				cout << "警告：缓存区数据包个数超过了256" << endl;
+			newpakcket.SetID(index[0]);
+			newpakcket.SetSize(res);
+			index.erase(index.begin());
+			PacketBuffer.push_back(newpakcket);
+		}
 	}
 
 }
@@ -265,57 +309,86 @@ bool SchedulingURLLCMS::Updatetimer()
 }
 
 
-void SchedulingURLLCMS::Feedback()
+void SchedulingURLLCMS::Feedback(enum Receive_mode mode)
 {
-	
-	double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6 / 1000;
-	arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
-	arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
-
-	tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
-	tempRHr.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
-	tempRH.zeros(Sim.channel->NumberOfTransmitAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
-	UMS[id]->channel->ShortTermChannel(id);
-	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+	if (Sim.TTI == 0)
 	{
-		tempRHr = tempRHr + UMS[id]->channel->FrequencyChannel(0, 0, RBindex)	*	(UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t()) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
-		tempRH = tempRH + (UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t())	*	(UMS[id]->channel->FrequencyChannel(0, 0, RBindex)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
-	}
+		double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;
+		noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 
-	arma::svd(tempU, temps, tempV, tempRH, "std");
-	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
-	{
+		arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
+		arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
+
 		tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
-		for (int si = 1; si < SLS_MAX_BS; si++)
+		tempRHr.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
+		tempRH.zeros(Sim.channel->NumberOfTransmitAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
+		UMS[id]->channel->ShortTermChannel(id);
+		/*
+		for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
 		{
-			tempRI = tempRI + UMS[id]->channel->FrequencyChannel(si, 0, RBindex)*UMS[id]->channel->FrequencyChannel(si, 0, RBindex).t() / double(Sim.channel->NumberOfTransmitAntennaPort);
+			tempRHr = tempRHr + UMS[id]->channel->FrequencyChannel(0, 0, RBindex)	*	(UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t()) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
+			tempRH = tempRH + (UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t())	*	(UMS[id]->channel->FrequencyChannel(0, 0, RBindex)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
 		}
-		tempM = UMS[id]->channel->FrequencyChannel(0, 0, RBindex)*tempV.col(0);
-		tempIRC = tempM.t()*(tempM*tempM.t() + tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i();
-		temph = tempIRC*UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
-		signal = temph*temph.t();
-		interferencePlusNoise = tempIRC*(tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort))*tempIRC.t();
-		FrequencySinr(RBindex) = real(signal(0, 0)) / real(interferencePlusNoise(0, 0));
-	}
+		*/
 
-	UMS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1;
-	UMS[id]->scheduling->downlinkESINR = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1 + UMS[id]->scheduling->HARQeSINR;
-	UMS[id]->scheduling->downlinkESINRdB = 10.0 * log10(UMS[id]->scheduling->downlinkESINR);
-	UMS[id]->scheduling->downlinkspectralEfficiency = GetSpectralEfficiency(UMS[id]->scheduling->downlinkESINRdB, UMS[id]->scheduling->MCS);
-	
+		for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+		{
+			//UMS[id]->channel->FrequencyChannel(0, 0, RBindex) = UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
+			tempRHr = UMS[id]->channel->FrequencyChannel(0, 0, RBindex) * UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t() / double(Sim.channel->NumberOfTransmitAntennaPort);
+			tempRH = UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t() * UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
+			arma::svd(tempU, temps, tempV, tempRH, "std");
+			tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
+			for (int si = 1; si < SLS_MAX_BS; si++)
+			{
+				tempRI = tempRI + UMS[id]->channel->FrequencyChannel(si, 0, RBindex) * UMS[id]->channel->FrequencyChannel(si, 0, RBindex).t() / double(Sim.channel->NumberOfTransmitAntennaPort);
+			}
+			tempM = UMS[id]->channel->FrequencyChannel(0, 0, RBindex) * tempV.col(0);
+			if (mode==MMSE)
+				tempIRC = tempM.t() * (tempM * tempM.t() + tempRI + noise * arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i();
+			else
+				tempIRC = (tempM.t() * tempM).i() * tempM.t();
+			temph = tempIRC * UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
+			signal = temph * temph.t();
+			interferencePlusNoise = tempIRC * (tempRI + noise * arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)) * tempIRC.t();
+			FrequencySinr(RBindex) = real(signal(0, 0)) / real(interferencePlusNoise(0, 0));
+			UMS[id]->scheduling->ESINRdB[RBindex] = 10.0 * log10(FrequencySinr(RBindex));
+			spectralEfficiency[RBindex] = GetSpectralEfficiency(UMS[id]->scheduling->ESINRdB[RBindex], UMS[id]->scheduling->subband_mcs[RBindex]);
+		}
+
+		UMS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1;
+		UMS[id]->scheduling->downlinkESINR = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1 + UMS[id]->scheduling->HARQeSINR;
+		UMS[id]->scheduling->downlinkESINRdB = 10.0 * log10(UMS[id]->scheduling->downlinkESINR);
+		UMS[id]->scheduling->downlinkspectralEfficiency = GetSpectralEfficiency(UMS[id]->scheduling->downlinkESINRdB, UMS[id]->scheduling->MCS);
+	}
+	else
+	{
+		UMS[id]->scheduling->downlinkESINR = UMS[id]->scheduling->downlinkESINR0 + UMS[id]->scheduling->HARQeSINR;
+		UMS[id]->scheduling->downlinkESINRdB = 10.0 * log10(UMS[id]->scheduling->downlinkESINR);
+		UMS[id]->scheduling->downlinkspectralEfficiency = GetSpectralEfficiency(UMS[id]->scheduling->downlinkESINRdB, UMS[id]->scheduling->MCS);
+		//subband 计算
+		for (int RBindex = 0; RBindex < Sim.scheduling->numRB; RBindex++)
+		{
+			UMS[id]->scheduling->spectralEfficiency[RBindex] = GetSpectralEfficiency(UMS[id]->scheduling->ESINRdB[RBindex], UMS[id]->scheduling->subband_mcs[RBindex]);
+		}
+	}
 }
 
-void SchedulingURLLCMS::ReceivedSINR()
+void SchedulingURLLCMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 {
 	
-	double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6 / 1000;
+	//double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6 / 1000;
+	double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;//不要除以1000，信号的单位是dBm
+	noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
+
 	arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
-	arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
+	//arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
+	arma::vec temps;
 
 	tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 	tempRHr.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 	tempRH.zeros(Sim.channel->NumberOfTransmitAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
 	UMS[id]->channel->ShortTermChannel(id);
+	/*
 	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
 	{
 		//FrequencyChannel, (Sim.network->numUMS, 2, 50)
@@ -324,22 +397,47 @@ void SchedulingURLLCMS::ReceivedSINR()
 		tempRH = tempRH + (UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t())	*	(UMS[id]->channel->FrequencyChannel(0, 0, RBindex)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
 		//平均过
 	}
-
 	arma::svd(tempU, temps, tempV, tempRH, "std");//svd(U,S,V,X)  X = USV’
-	for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+	*/
+
+	int bsID = UMS[id]->channel->BSindex(0);
+	map<int, vector <int>>::iterator iter = BS[bsID]->scheduling->allocationMapUMS.find(id);
+	vector<int> Rs = iter->second;
+	int size = Rs.size();
+
+	arma::vec FrequencySinr(size);
+	for (int i = 0; i < size; i++)
 	{
+		int RBindex = Rs[i];
+		
+		UMS[id]->channel->FrequencyChannel(0, 0, RBindex) = UMS[id]->channel->FrequencyChannel(0, 0, RBindex) * sqrt(BS[bsID]->scheduling->ratio[RBindex] / double(Sim.channel->NumberOfTransmitAntennaPort));//发射天线均分功率
+		tempRHr = UMS[id]->channel->FrequencyChannel(0, 0, RBindex) * UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t();
+		tempRH = UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t() * UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
+		arma::svd(tempU, temps, tempV, tempRH, "std");//svd(U,S,V,A)，奇异值分解，A=USV'
 		tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 		for (int si = 1; si < SLS_MAX_BS; si++)
 		{
-			tempRI = tempRI + UMS[id]->channel->FrequencyChannel(si, 0, RBindex)*UMS[id]->channel->FrequencyChannel(si, 0, RBindex).t() / double(Sim.channel->NumberOfTransmitAntennaPort);
+			int bsID0 = UMS[id]->channel->BSindex(si);
+			//增加判断基站UMS[id]->channel->BSindex(si)是否使用了RBindex，使用了，才会产生干扰
+			//同时需要考虑同一基站使用相同RBindex给不同用户产生的互干扰
+			if (Sim.scheduling->resource_used(bsID0, RBindex) == 1)
+			{
+				tempRI = tempRI + UMS[id]->channel->FrequencyChannel(si, 0, RBindex) * UMS[id]->channel->FrequencyChannel(si, 0, RBindex).t() * BS[bsID0]->scheduling->ratio[RBindex] / double(Sim.channel->NumberOfTransmitAntennaPort);//h2*h2H
+			}
 		}
+
 		tempM = UMS[id]->channel->FrequencyChannel(0, 0, RBindex)*tempV.col(0); //第一个特征值的平方*第一个特征向量。 
-		tempIRC = tempM.t()*(tempM*tempM.t() + tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i(); // 求逆，接近Ryy的逆。 当作解扩信号来看，可以得到信噪比公式  tempIRC*y的信噪比，信号功率为1
+		if (mode == MMSE)
+			tempIRC = tempM.t() * (tempM * tempM.t() + tempRI + noise * arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i(); // 求逆，接近Ryy的逆。 当作解扩信号来看，可以得到信噪比公式  tempIRC*y的信噪比，信号功率为1
+		else
+			tempIRC = (tempM.t() * tempM).i() * tempM.t();
+		
 		//tempIRC是组合n跟接收天线的向量，含义是什么？
 		temph = tempIRC*UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
 		signal = temph*temph.t();
 		interferencePlusNoise = tempIRC*(tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort))*tempIRC.t();
-		FrequencySinr(RBindex) = real(signal(0, 0)) / real(interferencePlusNoise(0, 0));
+		FrequencySinr(i) = real(signal(0, 0)) / real(interferencePlusNoise(0, 0));
+		ESINRdB[RBindex] = 10.0 * log10(FrequencySinr(i));
 		//cout << "1: " << real(signal(0, 0)) << " 2: " << real(interferencePlusNoise(0, 0)) << " 3: " << FrequencySinr(RBindex) << endl;
 	}
 

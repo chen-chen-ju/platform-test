@@ -59,6 +59,8 @@ int main()
 
 		for (Sim.TTI = 0; Sim.TTI < Sim.numTTI; Sim.TTI++)
 		{
+			Sim.OFDM = 0;
+			Sim.OFDM_shift = 0;
 			//Sim.scheduling->resource_used.print();
 			if (Sim.TTI == 0 || Sim.TTI % Sim.feedbackPeriod == 0)
 			{
@@ -66,10 +68,10 @@ int main()
 				if(Sim.TTI > 0)
 					Sim.channel->LongTermChannel();
 				*/
-				Sim.scheduling->Feedback(); // MS feedback				
+				Sim.scheduling->Feedback(); // MS feedback	
+				Sim.OFDM_shift = 2;
 			}
-			Sim.OFDM = 0;
-			while (Sim.OFDM < 14)
+			while (Sim.OFDM + Sim.OFDM_shift < 14)
 			{
 				Sim.scheduling->BufferUpdate(); // System buffer update
 				Sim.scheduling->Schedule(); // Scheduling

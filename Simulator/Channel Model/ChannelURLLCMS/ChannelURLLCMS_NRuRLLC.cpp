@@ -390,7 +390,7 @@ void ChannelURLLCMS::ChannelCoefficient(int src) {
 	arma::field<arma::cx_mat> SI_H_t_los(SLS_MAX_BS, 1); //이거랑
 	arma::field<arma::cx_mat> SI_H_t(SLS_MAX_BS, numProcess, MAX_CLUSTER); //이거 process 지우기
 	UMS[src]->channel->HtLOS = arma::field<arma::cx_mat>(Sim.network->numBS, 1);
-	UMS[src]->channel->Ht = arma::field<arma::cx_mat>(Sim.network->numBS, 1, MAX_CLUSTER);
+	UMS[src]->channel->Ht = arma::field<arma::cx_mat>(Sim.network->numBS, 1, MAX_CLUSTER + 4);
 
 
 	for (int bsIndex = 0; bsIndex < SLS_MAX_BS; bsIndex++) {
@@ -400,7 +400,7 @@ void ChannelURLLCMS::ChannelCoefficient(int src) {
 
 	for (int siIndex = 0; siIndex < Sim.network->numBS; siIndex++) {
 		for (int processIndex = 0; processIndex < numProcess; processIndex++) {
-			for (int n = 0; n < MAX_CLUSTER; n++) {
+			for (int n = 0; n < MAX_CLUSTER + 4; n++) {
 				SI_H_t(siIndex, processIndex, n).zeros(numRxAntenna*numPort, MAX_RAY);
 				UMS[src]->channel->Ht(siIndex, processIndex, n).zeros(numRxAntenna*numPort, MAX_RAY);
 			}
@@ -740,13 +740,13 @@ void ChannelURLLCMS::ApplyPathLossAndShadowing(int src) {
 		y.zeros(1, 1);
 		for (int n = 0; n < UMS[src]->channel->NumRealCluseter(dst)+4; n++)
 		{
-			UMS[src]->channel->Ht(si, 0, n) = (UMS[src]->channel->CouplingLoss(dst)) * UMS[src]->channel->Ht(si, 0, n);
+			UMS[src]->channel->Ht(si, 0, n) = sqrt(UMS[src]->channel->CouplingLoss(dst)) * UMS[src]->channel->Ht(si, 0, n);
 			//y = y + UMS[src]->channel->Ht(si, 0, n)*UMS[src]->channel->Ht(si, 0, n).t();
 			//y = UMS[src]->channel->Ht(si, 0, n)*UMS[src]->channel->Ht(si, 0, n).t();
 			//y.print();
 		}
 
-		UMS[src]->channel->HtLOS(si,0) = (UMS[src]->channel->CouplingLoss(dst)) * UMS[src]->channel->HtLOS(si,0);
+		UMS[src]->channel->HtLOS(si,0) = sqrt(UMS[src]->channel->CouplingLoss(dst)) * UMS[src]->channel->HtLOS(si,0);
 		//cout << UMS[src]->channel->channelCondition << endl;
 		//UMS[src]->channel->HtLOS(si, 0).print();
 		//y = y+ UMS[src]->channel->HtLOS(si, 0)*UMS[src]->channel->HtLOS(si, 0).t();
@@ -767,7 +767,8 @@ void ChannelURLLCMS::DftParameterSetting(int src)
 		for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++)
 		{
 			UMS[src]->channel->DftParameter(si, c).zeros(1, MAX_CLUSTER + 4);
-			int f = 213 + c * 12 + 6;
+			//int f = 213 + c * 12 + 6;
+			int f = (Sim.channel->NRuRLLC.carrierFrequency * 5000 - Sim.scheduling->numRB/2 + c) * 12;//4GHz
 			int abb1 = 0;
 			for (int n = 0; n < UMS[src]->channel->NumRealCluseter(siIndex); n++) {
 				if (n == 0 || n == 1) {
@@ -843,8 +844,8 @@ void ChannelURLLCMS::DiscreteFourierTransform(int src)
 				if (n == 0) //라이시안 부분 
 				{
 					vt.real(0.0);
-					vt.imag(2.0 * PI*UMS[src]->channel->VelocityLOS[siIndex] * double(Sim.TTI) / 1000.0);
-					h_k.col(n) = h_k.col(n) + UMS[src]->channel->HtLOS[si, pr] * exp(vt);
+					vt.imag(2.0 * PI*UMS[src]->channel->VelocityLOS(siIndex) * double(Sim.TTI) / 1000.0);
+					h_k.col(n) = h_k.col(n) + UMS[src]->channel->HtLOS(si, pr) * exp(vt);
 					//h_k.col(n) = h_k.col(n) + UMS[src]->channel->HtLOS(si, pr);
 				}
 			}

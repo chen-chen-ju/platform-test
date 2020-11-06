@@ -43,6 +43,15 @@ when		who				what, where, why
 /*                                                                         */
 /*-------------------------------------------------------------------------*/
 
+//新建的HARQ缓存类型
+/*
+typedef struct {
+	TB ReTransBlock;
+	//int TBsize;
+	int Timer;
+}HARQentity;
+*/
+
 // Scheduling Mobile Station
 class SchedulingURLLCMS
 {
@@ -52,6 +61,21 @@ public:
 	double msBuffer; // MS buffer for non-full buffer traffic
 	int dataSize; // Data size per traffic
 	int MCS;
+
+	//每个RB上的信息,in_band
+	vector<int> subband_mcs;//带内MCS，每个RB上的SINR情况
+	vector<double>spectralEfficiency;//每个RB上的频谱效率
+	vector<double>ESINRdB;//
+
+	vector<HARQentity> HARQbuffer;
+
+	//新增packet相关操作
+	deque<Packet> PacketBuffer;//RLC SDU包缓存
+	vector<uint> index;//可用序号0~255，最大一个用户可同时有256个RLC SDU
+	vector<int> divide_index;//切割序号的发放
+
+	int Needret; //重传标识
+
 	double downlinkaveragedThroghput, uplinkaveragedThroghput;
 	double downlinkspectralEfficiency, uplinkspectralEfficiency;
 	double averageUserPerceviedThroughput;
@@ -68,8 +92,8 @@ public:
 
 	void Initialize(int ms);
 	void BufferUpdate();
-	void Feedback();
-	void ReceivedSINR();
+	void Feedback(enum Receive_mode mode);
+	void ReceivedSINR(TB Tran, enum Receive_mode mode);
 	arma::cx_mat* PrecodingMatrix(enum Precoding_Matrix precodingtype, arma::cx_mat *codebook, int type);
 	double GetSpectralEfficiency(double SINR, int &MCS);
 	int GetTBsize(double SpectralEfficiency, double datasize);

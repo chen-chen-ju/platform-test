@@ -73,6 +73,13 @@ enum Precoding_Matrix {
 	Digitalbeamforming
 };
 
+enum Receive_mode {
+	MMSE,
+	ZF
+};
+
+
+
 /*-------------------------------------------------------------------------*/
 /*                                                                         */
 /*                             CLASS DECLARATION                           */

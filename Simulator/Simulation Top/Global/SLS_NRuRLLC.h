@@ -46,6 +46,7 @@ when		who				what, where, why
 #include <complex>
 #include <string>
 #include <windows.h>
+#include <iomanip>
 #include "../../../Simulator/Library/Math/armadillo-7.700.0/include/armadillo"
 #include"../../../Simulator/Simulation Top/Global/Packet.h"
 #include"../../../Simulator/Simulation Top/Global/Mac_Pdu.h"
@@ -133,6 +134,7 @@ typedef struct TransBlock {
 	int numRB;
 	int TBmcs;
 	double eSINR;
+	int URTimer;//供URLLC的TB使用
 }TB;
 
 //新建的HARQ缓存类型

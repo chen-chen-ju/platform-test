@@ -49,7 +49,8 @@ int main()
 	Sim.network->PlaceMacroBS(); // Macro BS placement
 	for (int i = 0; i < Sim.numIteration; i++)
 	{
-		srand(1);
+		//srand(10);
+		srand(time(NULL));
 		Sim.network->PlaceEMBBMS(); // eMBB MS placement (Full buffer)
 		Sim.network->PlaceURLLCMS(); // uRLLC MS placement (non-Full buffer)
 		Sim.network->PlaceWraparound();
@@ -64,6 +65,7 @@ int main()
 			//Sim.scheduling->resource_used.print();
 			if (Sim.TTI == 0 || Sim.TTI % Sim.feedbackPeriod == 0)
 			{
+				//实际使用时需要每个TTI计算一次大尺度
 				/*
 				if(Sim.TTI > 0)
 					Sim.channel->LongTermChannel();
@@ -76,6 +78,12 @@ int main()
 				Sim.scheduling->BufferUpdate(); // System buffer update
 				Sim.scheduling->Schedule(); // Scheduling
 				Sim.performance->Measure(); // Throughput measurement
+				/*
+				if (Sim.TTI == 1)
+				{
+					Sim.showht(0, 0);
+				}
+				*/
 				Sim.OFDM++;
 				cout << "******OFDM " << Sim.OFDM << "******" << endl;
 			}
@@ -136,14 +144,56 @@ void SystemSim::Initialize(string fileName)
 	Sim.LatencyTTI.zeros(Sim.network->numMS, Sim.numTTI);
 	Sim.BufferTTI.zeros(Sim.network->numMS, Sim.numTTI);
 
-	ofstream outFile, outFile1, outFile2;
+	ofstream outFile, outFile1,outFile2, outFile3, outFile4;
 	outFile.open("../../Simulator/Data/Output Data/Scheduled_NuRllc_sinr.txt", ios::trunc); //NuRllcMS_sinr
 	outFile.close();
 	outFile1.open("../../Simulator/Data/Output Data/Scheduled_NuRllc.txt", ios::trunc);
 	outFile1.close();
 	outFile2.open("../../Simulator/Data/Output Data/throughput_NuRllc.txt", ios::trunc);
 	outFile2.close();
+	outFile3.open("../../Simulator/Data/Output Data/ht_NuRllc.txt", ios::trunc);
+	outFile3.close();
+	outFile4.open("../../Simulator/Data/Output Data/TB_NuRllc.txt", ios::trunc);
+	outFile4 << "TTI" << "  " <<"BS ID" << "  " << "MS ID" << "  " << "First_RB" << "  " << "NUM_RB" << "  " << "TB Size" << "  " << "MCS" << "  " << "Timer" << "  " << "eSINR" <<endl;
+	outFile4.close();
 
+}
+
+
+void SystemSim::showht(int msID, int UEtype)
+{
+	ofstream outFile2;
+	outFile2.open("../../Simulator/Data/Output Data/ht_NuRllc.txt", ios::app);
+	if (UEtype == 0)//MS
+	{
+		int dst = MS[msID]->channel->BSindex(0);
+		for (int n = 0; n < MS[msID]->channel->NumRealCluseter(0) + 4; n++)
+		{
+			if (n < 3)
+				outFile2 << MS[msID]->channel->tau(0)(0) + 5e-9 * n + Sim.OFDM * 0.001 / 14 << " " << MS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(MS[msID]->channel->CouplingLoss(dst))) << endl;
+			else if (n < 6)
+				outFile2 << MS[msID]->channel->tau(0)(1) + 5e-9 * (n - 3) + Sim.OFDM * 0.001 / 14 << " " << MS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(MS[msID]->channel->CouplingLoss(dst))) << endl;
+			else
+				outFile2 << MS[msID]->channel->tau(0)(n - 4) + Sim.OFDM * 0.001 / 14 << " " << MS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(MS[msID]->channel->CouplingLoss(dst))) << endl;
+
+		}
+		
+	}
+	else//UMS
+	{
+		int dst = UMS[msID]->channel->BSindex(0);
+		for (int n = 0; n < UMS[msID]->channel->NumRealCluseter(0) + 4; n++)
+		{
+			if (n < 3)
+				outFile2 << UMS[msID]->channel->tau(0)(0) + 5e-9 * n + Sim.OFDM * 0.001 / 14 << " " << UMS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(UMS[msID]->channel->CouplingLoss(dst))) << endl;
+			else if (n < 6)
+				outFile2 << UMS[msID]->channel->tau(0)(1) + 5e-9 * (n - 3) + Sim.OFDM * 0.001 / 14 << " " << UMS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(UMS[msID]->channel->CouplingLoss(dst))) << endl;
+			else
+				outFile2 << UMS[msID]->channel->tau(0)(n - 4) + Sim.OFDM * 0.001 / 14 << " " << UMS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(UMS[msID]->channel->CouplingLoss(dst))) << endl;
+
+		}
+	}
+	outFile2.close();
 }
 
 
@@ -172,7 +222,8 @@ void SystemSim::Demonstration() {
 			double couplingloss = 10.0 * log10(MS[msID]->channel->CouplingLoss(bsID).real());
 			double pathloss = MS[msID]->channel->pathloss(bsID/3);
 			//outFile << "x:  " << BS[bsID]->network->pos3D(0, 0) << "	y:  " << BS[bsID]->network->pos3D(0, 1) << "  z:   " << BS[bsID]->network->pos3D(0, 2) << endl;
-			outFile  <<  msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 0) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << "    " << MS[msID]->network->location << endl;
+			//outFile  <<  msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 0) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << "    " << MS[msID]->network->location << endl;
+			outFile << msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << pathloss << " "<<sqrt(distance0) << endl;
 			//outFile << MS[msID]->network->wraparoundposBS(bsID/3, 0) << "	 " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "	 " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << endl;
 		}
 	}
@@ -195,7 +246,7 @@ void SystemSim::Demonstration() {
 		//outFile1 << MS[msID]->scheduling->downlinkESINRdB << "	" << MS[msID]->scheduling->MCS << endl;
 		for (int i = 0; i < Sim.network->numBS/3; i++)
 		{
-			outFile1 << MS[msID]->channel->pathloss(i) << "	" << MS[msID]->channel->channelCondition0[i] << "	" << MS[msID]->channel->RSRPout(3 * i + 0, 0) << "	" << MS[msID]->channel->RSRPout(3 * i + 1, 0) << "	" << MS[msID]->channel->RSRPout(3 * i + 2, 0) << endl;
+			outFile1 << msID <<"  "<< MS[msID]->channel->pathloss(i) << "	" << MS[msID]->channel->channelCondition0[i] << "	" << MS[msID]->channel->RSRPout(3 * i + 0, 0) << "	" << MS[msID]->channel->RSRPout(3 * i + 1, 0) << "	" << MS[msID]->channel->RSRPout(3 * i + 2, 0) << endl;
 		}
 		outFile1 << endl;
 	}
@@ -222,18 +273,38 @@ void SystemSim::Demonstration() {
 			outFile << endl;
 		}
 		*/
+	
 	ofstream outFile2;
-	outFile2.open("../../Simulator/Data/Output Data/throughput_NuRllc.txt", ios::app);
+	outFile2.open("../../Simulator/Data/Output Data/ht_NuRllc.txt");
 	for (int msID = 0; msID < Sim.network->numMS; msID++)
 	{
-		double throughputMS = MS[msID]->performance->instantThroughput0;
-		outFile2 << throughputMS << endl;
-	}
-	//outFile2 << "MS Throughput:  " << performance->throughputMS << endl;
-	//outFile2 << "UMS Throughput:  " << performance->throughputUMS << endl;
-	//outFile2 << endl;
-	outFile2.close();
+		//double throughputMS = MS[msID]->performance->instantThroughput0;
+		//outFile2 << throughputMS << endl;
+		int dst = MS[msID]->channel->BSindex(0);
+		for (int n = 0; n < MS[msID]->channel->NumRealCluseter(0)+4; n++)
+		{
+			if (n<3)
+				outFile2 << MS[msID]->channel->tau(0)(0)+ 5e-9*n<<" "<< MS[msID]->channel->Ht(0, 0, n).row(0)/(sqrt(MS[msID]->channel->CouplingLoss(dst)))<<endl;
+			else if (n<6)
+				outFile2 << MS[msID]->channel->tau(0)(1) + 5e-9 * (n-3) << " " << MS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(MS[msID]->channel->CouplingLoss(dst))) << endl;
+			else
+				outFile2 << MS[msID]->channel->tau(0)(n-4) << " " << MS[msID]->channel->Ht(0, 0, n).row(0) / (sqrt(MS[msID]->channel->CouplingLoss(dst))) << endl;
 
+		}
+		outFile2 << endl;
+		
+	}
+	outFile2.close();
+	
+	
+	ofstream outFile3;
+	outFile3.open("../../Simulator/Data/Output Data/throughput_NuRllc.txt", ios::app);
+	for (int msID = 0; msID < Sim.network->numMS; msID++)
+	{
+		//outFile3 << msID << " " << MS[msID]->scheduling->downlinkaveragedThroghput<<" "<< MS[msID]->scheduling->downlinkESINRdB<<endl;
+		outFile3 << MS[msID]->performance->instantThroughput<< endl;
+	}
+	outFile3.close();
 
 	ofstream Pbs, Buffer, Pms;
 

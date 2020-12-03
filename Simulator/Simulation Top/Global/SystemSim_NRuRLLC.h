@@ -65,6 +65,7 @@ public:
 	
 	//int main(); // Main flow
 	void Initialize(string fileName); // Initialization
+	void showht(int msID, int UEtype);//新增的显示函数
 	void Demonstration(); // Demo
 	void Reset();//重置一些调度参数
 	void ConcludeIteration();  // Conclude Iteration the simulation

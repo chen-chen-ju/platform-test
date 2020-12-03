@@ -107,6 +107,20 @@ void ChannelMS::LongTermChannel(int msID) {
 
 void ChannelMS::ShortTermChannel(int msID) {
 	
+	
+	if (Sim.TTI + Sim.OFDM > 0)
+	{
+		//每次short-term应该重新计算小尺度参数
+		for (int bsID = 0, site = 0; site < Sim.network->numSite; site++) {
+			for (int sector = 0; sector < Sim.network->numSector; sector++, bsID++) {
+				SmallScaleParameter(msID, bsID, site, sector);
+				CoefficientGeneration(msID, bsID, site, sector);
+			}
+		}
+		ChannelCoefficient(msID);
+		ApplyPathLossAndShadowing(msID);
+	}
+	
 	DftParameterSetting(msID);
 	DiscreteFourierTransform(msID);
 	/*if (Sim.TTI == (MS[msID]->network->bufferTime + MS[msID]->network->interArrivalTime(MS[msID]->network->arrivalTime)))
@@ -873,7 +887,7 @@ void ChannelMS::DftParameterSetting(int src)
 		{
 			MS[src]->channel->DftParameter(si, c).zeros(1, MAX_CLUSTER + 4);
 			//int f = 213 + c * 12 + 6;//4GHZ 感觉应该是19975*12+c*12
-			int f = 19975 * 12 + c * 12;//4GHz
+			int f = (Sim.channel->NRuRLLC.carrierFrequency * 5000 - Sim.scheduling->numRB/2  + c) * 12; //4GHz = 19975 * 12 + c * 12
 			int abb1 = 0;
 			for (int n = 0; n < MS[src]->channel->NumRealCluseter(siIndex); n++) {
 				if (n == 0 || n == 1) {
@@ -881,6 +895,7 @@ void ChannelMS::DftParameterSetting(int src)
 					if ((MS[src]->network->location == Outdoor) && (MS[src]->channel->channelCondition == LOS)) {
 						//double t = MS[src]->channel->tauLOS(siIndex)(n);
 						dft.real(0.0);
+						//cout << tauLOS(siIndex)(n) << endl;
 						dft.imag(-2.0 * PI*double(f)*MS[src]->channel->tauLOS(siIndex)(n) * 15360000.0 / 1024.0);
 						dft1.real(0.0);
 						dft1.imag(-2.0 * PI*double(f)*(MS[src]->channel->tauLOS(siIndex)(n) + 5e-9) * 15360000.0 / 1024.0);//tau单位要为s
@@ -931,6 +946,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 	arma::cx_mat tmpp;
 	tmpp.zeros(Sim.channel->NumberOfReceiveAntennaPort*Sim.channel->NumberOfTransmitAntennaPort, 1);
 	std::complex<double> vt(0.0, 0.0);
+	int t = 0;
 	for (int si = 0; si < SLS_MAX_BS; si++) {
 		y.zeros(1, 1);
 		h_k.zeros(Sim.channel->NumberOfReceiveAntennaPort*Sim.channel->NumberOfTransmitAntennaPort, MAX_CLUSTER + 4);
@@ -978,14 +994,12 @@ void ChannelMS::DiscreteFourierTransform(int src)
 				*/
 			}
 			/*
-			if (MS[src]->channel->HtLOS[si, pr](0, 0).real() > 0.001)
+			if ((src == 1) && t==0)
 			{
-				MS[src]->channel->HtLOS[si, pr].print();
-				cout << endl;
+				h_k.print();
+				t = 1;
 			}
 			*/
-			//h_k.print();
-			//cout << endl;
 			for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++) {
 				
 				/*

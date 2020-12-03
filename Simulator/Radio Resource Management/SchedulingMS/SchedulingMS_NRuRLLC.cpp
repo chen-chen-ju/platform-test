@@ -187,7 +187,8 @@ void SchedulingMS::Initialize(int ms)
 	if (Sim.network->bufferModel == RRM::NonFullBuffer)
 	{
 		dataSize = Sim.scheduling->dataSize;
-		interArrivalTime = 14*ceil(-(1 / Sim.network->meanArrivalTime) * log(1 - arma::randu()) * 10 / 5); // first traffic generation TTI for non-full-buffer MS
+		//interArrivalTime = ceil(-(1 / Sim.network->meanArrivalTime) * log(1 - arma::randu()) * 10 / 5); // first traffic generation TTI for non-full-buffer MS
+		interArrivalTime = 0;
 		msBuffer = 0.0; // buffer initialization
 	}
 }
@@ -210,8 +211,8 @@ void SchedulingMS::BufferUpdate()//每次数据到达相当于来一个RLC SDU
 	if ((Sim.TTI == interArrivalTime))//MS每个TTI开始调度一次
 	{
 		msBuffer = msBuffer + dataSize;
-		interArrivalTime = Sim.TTI + ceil(-(1 / Sim.network->meanArrivalTime) * log(1 - arma::randu()) * 10 / 5);// * 10 / 5  强度为1的possion分布。OFDM应该为0，只在每个TTI统计数据包
-		
+		//interArrivalTime = Sim.TTI + ceil(-(1 / Sim.network->meanArrivalTime) * log(1 - arma::randu()) * 10 / 5);// * 10 / 5  强度为1的possion分布。OFDM应该为0，只在每个TTI统计数据包
+		interArrivalTime = Sim.TTI + 1;
 
 		//对packet缓存进行操作
 		Packet newpakcket;
@@ -388,7 +389,6 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 
 void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 {
-	
 	double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;//不要除以1000，信号的单位是dBm
 	noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 	arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
@@ -405,8 +405,8 @@ void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 		tempRH = tempRH + (MS[id]->channel->FrequencyChannel(0, 0, RBindex).t())	*	(MS[id]->channel->FrequencyChannel(0, 0, RBindex)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50);
 	}
 	*/
-	//if (id == 0)
-		//int t = 1;
+	if (id == 1)
+		int t = 1;
 
 	int bsID = MS[id]->channel->BSindex(0);
 	map<int, vector <int>>::iterator iter = BS[bsID]->scheduling->allocationMapMS.find(id);
@@ -422,6 +422,8 @@ void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 	{
 		int RBindex = Rs[i];
 		//MS[id]->channel->FrequencyChannel(0, 0, RBindex) = MS[id]->channel->FrequencyChannel(0, 0, RBindex) / num0;
+		//if (id == 1 && i == 0)
+			//MS[id]->channel->FrequencyChannel(0, 0, RBindex).print();
 		MS[id]->channel->FrequencyChannel(0, 0, RBindex) = MS[id]->channel->FrequencyChannel(0, 0, RBindex) * sqrt(BS[bsID]->scheduling->ratio[RBindex] / double(Sim.channel->NumberOfTransmitAntennaPort));//发射天线均分功率
 		tempRHr = MS[id]->channel->FrequencyChannel(0, 0, RBindex) * MS[id]->channel->FrequencyChannel(0, 0, RBindex).t() ;
 		tempRH = MS[id]->channel->FrequencyChannel(0, 0, RBindex).t() * MS[id]->channel->FrequencyChannel(0, 0, RBindex);
@@ -434,6 +436,8 @@ void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 			//同时需要考虑同一基站使用相同RBindex给不同用户产生的互干扰
 			if (Sim.scheduling->resource_used(bsID0, RBindex) == 1)
 			{
+				//if (id == 49)
+					//cout << "1:"<<bsID0 << endl;
 				//int num1 = Sim.scheduling->numRB - BS[bsID0]->scheduling->RB_free.size();//使用的资源数量
 				//MS[id]->channel->FrequencyChannel(si, 0, RBindex).print();
 				//MS[id]->channel->FrequencyChannel(si, 0, RBindex) = MS[id]->channel->FrequencyChannel(si, 0, RBindex) / num1;

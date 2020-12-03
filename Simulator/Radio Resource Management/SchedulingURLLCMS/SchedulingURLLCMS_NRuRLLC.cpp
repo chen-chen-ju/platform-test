@@ -187,7 +187,6 @@ void SchedulingURLLCMS::Initialize(int ms) //Network::PlaceURLLCMS()
 			divide_index.push_back(i);
 		}
 	}
-	Timer = 0;
 }
 
 
@@ -299,12 +298,7 @@ double SchedulingURLLCMS::GetTBsize(double SpectralEfficiency, int nprb)
 
 bool SchedulingURLLCMS::Updatetimer()
 {
-	if (Timer > 0)
-	{
-		Timer = Timer - 1;
-		if (Timer == 0)
-			return 1;
-	}
+	//弃用，在performance中依靠TB的计时器更新。
 	return 0;
 }
 

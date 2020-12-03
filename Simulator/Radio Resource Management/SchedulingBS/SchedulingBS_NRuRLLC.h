@@ -64,7 +64,8 @@ public:
 	vector<int> RB_belongMS;//被MS使用的RB序列
 	vector<int> RB_free;//未被使用的RB
 
-	vector<TB> TB_entity;//记录每个用户传输的packet序列
+	vector<TB> TB_entity;//记录每个用户传输的packet序列，MS用户的TB集合
+	vector<TB> TB_entityUMS;//UMS用户的TB集合
 	vector<double> ratio;//记录功率分配系数，和为1
 
 	double downlinkBuffer;

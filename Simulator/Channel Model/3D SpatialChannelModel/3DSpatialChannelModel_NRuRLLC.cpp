@@ -1023,12 +1023,14 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 	pathlossLOS = 0;
 	breakPointDistance2D = 4.0 * (dstZ - 1.0) * (srcZ - 1.0) * (Sim.channel->NRuRLLC.carrierFrequency*1e9) / 3e8;
 
-	if (distance2D >= 10 && distance2D <= breakPointDistance2D) { // >=10
+	if (distance2D >= 10 && distance2D <= breakPointDistance2D) { // >=10；小于10怎么办？
 		pathlossLOS = 28.0 + 22.0 * log10(distance3D) + 20.0 * log10(Sim.channel->NRuRLLC.carrierFrequency);
 	}
 	else if (breakPointDistance2D < distance2D && distance2D < 5000.0) {
 		pathlossLOS = 40.0 * log10(distance3D) + 28.0 + 20.0 * log10(Sim.channel->NRuRLLC.carrierFrequency) - 9.0 * log10(pow(breakPointDistance2D, 2.0) + pow((srcZ - dstZ), 2.0));
 	}
+	else
+		pathlossLOS = 50+ 20.0 * log10(Sim.channel->NRuRLLC.carrierFrequency);
 	pathlossNLOS = 13.54 + 39.08 * log10(distance3D) + 20.0 * log10(Sim.channel->NRuRLLC.carrierFrequency) - 0.6 * (dstZ - 1.5);
 
 	// LOS probability cacluation
@@ -1054,7 +1056,7 @@ void SpatialChannel::Pathloss(int src, int dst, int type) {
 		{
 			MS[src]->channel->pathloss(dst) = pathloss;
 			MS[src]->channel->channelCondition = NLOS;//不需要用数组，每次是覆盖的
-			MS[src]->channel->channelCondition0[dst] = NLOS;//10.21更新
+			MS[src]->channel->channelCondition0[dst] = NLOS;
 		}
 		else
 		{
@@ -1135,6 +1137,7 @@ void SpatialChannel::Delay(int src, int type) {
 
 	for (int n = 0; n < numCluster; n++) {
 		tau(n, 0) = tauPrime(n, 0) - temp;//归一化
+		//cout << tau(n, 0) << endl;
 	}
 
 	arma::mat delay = arma::sort(tau, "ascend");
@@ -1380,7 +1383,7 @@ void SpatialChannel::ArrivalAndDepartureAngle(int src, int dst, int site, int se
 	arrivalAngleGCS(0, 0) = AzimuthAngleOfGlobalCoordinateSystem(pos3D(0, 0), pos3D(1), wraparoundposBS(site, 0), wraparoundposBS(site, 1));
 	arrivalAngleGCS(1, 0) = ZenithAngleOfGlobalCoordinateSystem(pos3D(0), pos3D(1), pos3D(2), wraparoundposBS(site, 0), wraparoundposBS(site, 1), wraparoundposBS(site, 2));
 
-	//根据扇区不同，得到角度不同
+	//根据扇区不同，得到角度不同 没有使用？
 	if (sector == 0) {
 		arma::mat departureAngleLCS = GlobalCoordinateSystemAngleToLocalCoordinateSystemAngle(Sim.network->sectorDegree.alpha0, Sim.network->beta, Sim.network->gamma, departureAngleGCS);
 		arma::mat arrivalAngleLCS = GlobalCoordinateSystemAngleToLocalCoordinateSystemAngle(Sim.network->sectorDegree.alpha0, Sim.network->beta, Sim.network->gamma, arrivalAngleGCS);
@@ -1762,6 +1765,7 @@ void SpatialChannel::ArrivalAndDepartureAntennaGain(int src, int dst, int site, 
 	arma::mat ReceiverAntennaGainULOS = ReceiverAntennaGain(src,zetaRx1, receiverAngleLOS, type);
 	if (Sim.channel->MsAntennaModel == CHANNEL::CrossPolarization) ReceiverAntennaGainXLOS = ReceiverAntennaGain(src, zetaRx2, receiverAngleLOS, type);
 	//公式7.5-22 prd是发射天线 urd是接收天线
+	//f_prd_LOS与扇区有关
 	arma::cx_mat f_prd_LOS = exp_F_prd(src, alpha[sector], beta, gamma, transmitAngleLOS * 180 / PI, numTxHorizontalAntenna, numTxVerticalAntenna, numTxPort);
 	arma::cx_mat f_urd_LOS = exp_F_urd(src, receiverAngleLOS * 180 / PI, numRxAntenna, type);
 
@@ -1779,6 +1783,7 @@ void SpatialChannel::ArrivalAndDepartureAntennaGain(int src, int dst, int site, 
 	arma::cx_mat TransmitterAntennaGainXLOS;
 	arma::cx_mat TransmitterAntennaGainULOS;
 	for (int processIndex = 0; processIndex < numProcess; processIndex++) {
+		//TransmitterAntennaGainULOS与扇区有关
 		TransmitterAntennaGainULOS = TransmitterAntennaGain(src, alpha[sector], beta, gamma, zetaTx1, transmitAngleLOS, dst, numProcess);
 		if (Sim.channel->BsAntennaModel == CHANNEL::CrossPolarization) TransmitterAntennaGainXLOS = TransmitterAntennaGain(src, alpha[sector], beta, gamma, zetaTx2, transmitAngleLOS, dst, numProcess);
 	}
@@ -2010,7 +2015,7 @@ double SpatialChannel::Modulo(double a, double b) {  //减去最多倍数的b
 arma::mat SpatialChannel::ReceiverAntennaGain(int src, int zeta, arma::mat angleGCS, int type) { // 
 	arma::mat angleLCS, antennaOrientation;
 	if (type == 0)
-		antennaOrientation = MS[src]->channel->antennaOrientation;
+		antennaOrientation = MS[src]->channel->antennaOrientation;//三扇区中心角
 	else
 		antennaOrientation = UMS[src]->channel->antennaOrientation;
 	

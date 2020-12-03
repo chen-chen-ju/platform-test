@@ -46,10 +46,11 @@ when		who				what, where, why
 //新建的HARQ缓存类型
 /*
 typedef struct {
-	TB ReTransBlock;
+	vector<int> RB;
+	int num;//资源数量
 	//int TBsize;
 	int Timer;
-}HARQentity;
+}URLLC_Timer;
 */
 
 // Scheduling Mobile Station
@@ -88,7 +89,10 @@ public:
 	double downlinkESINR, downlinkESINR0, uplinkESINR;
 	double HARQeSINR;
 	int Maxrettime; //最大重传次数
-	int Timer; //定时器，4个OFDM符号
+	//int Timer; //定时器，4个OFDM符号
+	//有多个URLLC时，一个Timer无法区分(将定时器转移到TB中了)
+	//新建一个缓存，存储每个TB的资源和计时情况
+	//vector<URLLC_Timer> URTimer;
 
 	void Initialize(int ms);
 	void BufferUpdate();

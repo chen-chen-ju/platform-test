@@ -58,7 +58,9 @@ void PerformanceMS::Initialize(int ms)
 
 void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 {
-	
+	if (id == 32)
+		int t = MS[id]->scheduling->MCS;
+
 	if (MS[id]->scheduling->Pi == 1)
 	{
 		instantThroughput = 0;
@@ -124,7 +126,7 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 			}
 			else
 			{
-				instantThroughput = TB_size * 1000;
+				instantThroughput = 0.1;
 				instantThroughput0 = 0.1;
 				//MS[id]->scheduling->HARQeSINR = MS[id]->scheduling->HARQeSINR + temp;
 				error_packet++;
@@ -173,7 +175,8 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 		
 	}
 
-	downlinkThroghput = downlinkThroghput * (Sim.TTI) / (Sim.TTI + 1) + instantThroughput / (Sim.TTI + 1);
+	downlinkThroghput = instantThroughput;
+	//downlinkThroghput = downlinkThroghput * (Sim.TTI) / (Sim.TTI + 1) + instantThroughput / (Sim.TTI + 1);
 }
 
 double PerformanceMS::FER(double SINR, int MCS)//误块率，TB传输出错概率

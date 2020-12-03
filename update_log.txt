@@ -35,3 +35,8 @@ delay是统计所有包的总时延。
 	把结构体HARQentity的定义搬移到SLS_NRuRLLC，以便MS和UMS用户共同使用该参数。
 	在Packet.h中增加了Adddelay()函数,根据操作过程增加包的时延。
 	修改了UMS用户的Scheduling和Performance过程和ChannelMS，还差BS处的调度还没修改。
+2020/11/30 修改了SchedulingBS、PerformBS和PerformMS，实现UMS的调度。
+	修改了Scheduling_NRuRLLC中初始化resource_used时的大小分配，避免了TTI 0时，numBS还未定义的问题。
+	修改了ShortTermChannel函数，解决了每次使用，不会更新小尺度参数的问题。相应地，为了显示TTI开始时刻的RSRP，在main函数中使用了showRSRP(TTI,OFDM,UEtype)函数。
+	修改了3DSpatialChannelModel_NRuRLLC的Pathloss函数，增加了距离小于10情况下的路损定义。
+	在SystemSim使用了showht(msID,UEtype),来显示某个用户在一个TTI内的ht的变化。

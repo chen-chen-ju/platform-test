@@ -73,21 +73,70 @@ void PerformanceBS::Measure()
 		}
 		*/
 		//从各个用户顺序测量，转化为根据TB，对有进行传输的用户进行测量
+		ofstream outFile;
 		for (int i = 0; i < BS[id]->scheduling->TB_entity.size(); i++)
 		{
 			TB temp = BS[id]->scheduling->TB_entity[i];
 			int msid = temp.TB_ID;
 			map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapMS.find(msid);
+			
+			outFile.open("../../Simulator/Data/Output Data/TB_NuRllc.txt", ios::app);
+			outFile <<Sim.TTI<< setw(7) << id << setw(7) << temp.TB_ID << setw(8) << iter->second[0] << setw(9) << temp.numRB << setw(9) << (int)temp.TBsize << setw(7) << temp.TBmcs << setw(6) << temp.rettime << setw(7) << temp.eSINR << endl;
+			
 			MS[msid]->performance->Measure(iter->second, temp);
 		}
+		outFile.close();
+
 	}
+
+	for (int i = 0; i < BS[id]->scheduling->TB_entityUMS.size(); i++)
+	{
+		TB temp = BS[id]->scheduling->TB_entityUMS[i];
+		temp.URTimer--;
+		if (temp.URTimer == 0)
+		{
+			int umsid = temp.TB_ID;
+			map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapMS.find(umsid);
+			UMS[umsid]->performance->Measure(iter->second, temp);
+
+			int num = temp.numRB;
+			//从基站的TB缓存中移除TB
+			BS[id]->scheduling->TB_entityUMS.erase(BS[id]->scheduling->TB_entityUMS.begin()+i);
+			i--;
+			//释放占用的资源
+			vector<int> reuse;
+			if (num == iter->second.size())
+			{
+				reuse = iter->second;
+				BS[id]->scheduling->allocationMapUMS.erase(umsid);//整个移除
+			}
+			else
+			{
+				reuse.assign(iter->second.begin(), iter->second.begin() + num);
+				BS[id]->scheduling->allocationMapUMS.erase(umsid);
+				//需要验证以下iter变化，是不是本体也变化了。应该是，因为iter是地址。
+				iter->second.erase(iter->second.begin(), iter->second.begin()+num);//因为有多个TB，只能移除该TB占用的资源。在前的TB，使用的资源也是排在前面的。
+			}
+			
+
+			//UMS的资源重新可用,放入空闲资源中
+			//BS[id]->scheduling->RB_free.insert(BS[id]->scheduling->RB_free.begin(), reuse.begin(), reuse.end());//修改了，使得RB_free里可用资源按升序排列
+			for (vector<int>::iterator iter0 = reuse.begin(); iter0 != reuse.end(); iter0++)
+			{
+				BS[id]->scheduling->RB_free.push_back(reuse[*iter0]);//资源轮询使用，之前未被使用的资源会先使用
+				BS[id]->scheduling->RB_belong[*iter0] = -1; //资源重新标识为可用
+			}
+		}
+	}
+
+	/*
 	for (map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapUMS.begin(); iter != BS[id]->scheduling->allocationMapUMS.end(); iter++)
 	{
 		TB newTB;
 		UMS[iter->first]->performance->Measure(iter->second, newTB);
 		throughputUMS = throughputUMS + UMS[iter->first]->performance->instantThroughput;
 	}
-
+	*/
 
 
 	/*

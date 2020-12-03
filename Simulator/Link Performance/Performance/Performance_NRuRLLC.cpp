@@ -73,6 +73,11 @@ void Performance::Conclude()
 void Performance::Measure()
 {
 	//Sim.scheduling->resource_used.print();
+	//用于获取ht图像
+	if (Sim.OFDM + Sim.OFDM_shift != 13)
+		MS[0]->channel->ShortTermChannel(0);
+
+
 	for (int i = 0; i < Sim.network->numMS; i++)
 		MS[i]->performance->instantThroughput = 0;
 	for (int i = 0; i < Sim.network->numUMS; i++)
@@ -94,14 +99,19 @@ void Performance::Measure()
 	double averagedPfWindowSize = 50.0;
 	setcolor(15, 0);
 	cout << "************ TTI: " << Sim.TTI << " ************" << endl;
-	for (int msID = 0; msID < Sim.network->numMS; msID++)
+
+	if (Sim.OFDM + Sim.OFDM_shift == 13)
 	{
-		MS[msID]->scheduling->downlinkaveragedThroghput = MS[msID]->scheduling->downlinkaveragedThroghput*(Sim.TTI) / (Sim.TTI + 1) + MS[msID]->performance->downlinkThroghput / (Sim.TTI + 1);
+		for (int msID = 0; msID < Sim.network->numMS; msID++)
+		{
+			MS[msID]->scheduling->downlinkaveragedThroghput = MS[msID]->scheduling->downlinkaveragedThroghput * (Sim.TTI) / (Sim.TTI + 1) + MS[msID]->performance->downlinkThroghput / (Sim.TTI + 1);
+		}
 	}
 	for (int msID = 0; msID < Sim.network->numUMS; msID++)
 	{
 		UMS[msID]->scheduling->downlinkaveragedThroghput = UMS[msID]->scheduling->downlinkaveragedThroghput*(Sim.TTI) / (Sim.TTI + 1) + UMS[msID]->performance->downlinkThroghput / (Sim.TTI + 1);
 	}
+
 	cout << "******** Average Throughput Calculated ********" << endl;
 	//for (int msID = 0; msID < Sim.network->numMS; msID++)
 	//{

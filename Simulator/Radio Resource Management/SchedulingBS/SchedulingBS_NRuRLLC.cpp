@@ -674,6 +674,8 @@ void SchedulingBS::SCMASchedule(int bsID)
 	int num_MS = 0;
 	vector<int> UE_list;//需要提供服务的用户，buffer>0或者要重传
 	GetUElist(bsID, num_MS, UE_list);
+	if (num_MS == 0)
+		return;
 	int num_RB = Sim.scheduling->numRB;
 	int num_CB = Sim.scheduling->numCB;
 	if (Sim.scheduling->SCMAmodel == 0)
@@ -701,12 +703,9 @@ void SchedulingBS::SCMASchedule(int bsID)
 	for (int i = 0; i < num_CB; i++)
 	{
 		//unCB.emplace_back(i);
-		if (i == 0)
-		{
-			int ind = i / num_perGroup;
-			CB_perGroup[ind].emplace_back(i);
-		}
-		else
+		int ind = i / num_perGroup;
+		CB_perGroup[ind].emplace_back(i);
+		if (i > 0)
 		{
 			index = unUE;//index恢复
 		}
@@ -767,38 +766,37 @@ void SchedulingBS::SCMASchedule(int bsID)
 				for (int j = 0; j < m; j++)
 					useHscore(i, j) = Hscore(unCB[i], unUE[j]);
 			}
-			vector<int> assign;//行是CB，列是用户。assign[i]记录的是第i个CB分配给哪个用户
+			vector<int> assign(m);//行是CB，列是用户。assign[i]记录的是第i个CB分配给哪个用户
 			Hungarian(assign, useHscore);
 			//更新分配结果
+			//vector<int>::iterator it = unUE.begin();
 			for (int i = 0; i < m; i++)
 			{
 				int UE_ind = unUE[assign[i]];
 				allocation[UE_ind].emplace_back(unCB[i]);
 				ratelist[UE_ind] += rate(unCB[i], UE_ind);
+			}
 
+			vector<int>::iterator it = unUE.begin();
+			while (it != unUE.end())
+			{
 				//用户需求被满足,删除此用户
-				if (ratelist[UE_ind] >= rate_th)
+				if (ratelist[*it] >= rate_th)
 				{
-					for (vector<int>::iterator iter = unUE.begin(); iter != unUE.end(); iter++)
-					{
-						if (*iter == UE_ind)
-						{
-							unUE.erase(iter);
-							break;
-						}
-					}
+					it = unUE.erase(it);
 				}
 				else
 				{
 					//更新Gscore和Hscore
 					for (int j = m; j < unCB.size(); j++)
 					{
-						if (ratelist[UE_ind] + rate(unCB[j], UE_ind) >= rate_th)
+						if (ratelist[*it] + rate(unCB[j], *it) >= rate_th)
 						{
 							//Gscore(unCB[j], UE_ind) = 1;
-							Hscore(unCB[j], UE_ind) = Qscore(unCB[j], UE_ind) + 1;
+							Hscore(unCB[j], *it) = Qscore(unCB[j], *it) + 1;
 						}
 					}
+					it++;
 				}
 			}
 			//删除使用的CB，前m个
@@ -807,7 +805,7 @@ void SchedulingBS::SCMASchedule(int bsID)
 		}
 		else
 		{
-			vector<int> assign;
+			vector<int> assign(m);
 			arma::imat useHscore(n, m);
 			for (int i = 0; i < n; i++)
 			{
@@ -862,6 +860,8 @@ void SchedulingBS::SCMAPF(int bsID)
 	int num_MS = 0;
 	vector<int> UE_list;//需要提供服务的用户，buffer>0或者要重传
 	GetUElist(bsID, num_MS, UE_list);
+	if (num_MS == 0)
+		return;
 	int num_RB = Sim.scheduling->numRB;
 	int num_CB = Sim.scheduling->numCB;
 	arma::mat rate(num_CB, num_MS);//速率矩阵
@@ -1497,6 +1497,7 @@ bool SchedulingBS::isOptimal(int n, vector<int>& assign, arma::imat& mat)
 					t++;
 				zero_flag(i, t) = 1;
 				tAssign[i] = t;
+				cnt++;
 				row_zero[i]--;
 				col_zero[t]--;
 				rowIsUsed[i] = 1;
@@ -1542,52 +1543,63 @@ bool SchedulingBS::isOptimal(int n, vector<int>& assign, arma::imat& mat)
 
 	}
 
-	//试分配，对没有独立0元素的行选择列号最小的0作为独立
-	for (int i = 0; i < n; i++)
+	//独立0元素个数不足
+	if (cnt != n)
 	{
-		if (rowIsUsed[i] == 0)
+		//试分配，对没有独立0元素的行选择列号最小的0作为独立
+		for (int i = 0; i < n; i++)
 		{
-			int flag = 0;//是否放好了独立0元素
-			for (int j = 0; j < n; j++)
+			if (rowIsUsed[i] == 0)
 			{
-				if (mat(i, j) == 0 && zero_flag(i, j) == 0)
+				int flag = 0;//是否放好了独立0元素
+				for (int j = 0; j < n; j++)
 				{
-					if (flag == 0)
+					if (mat(i, j) == 0 && zero_flag(i, j) == 0)
 					{
-						zero_flag(i, j) = 1;
-						tAssign[i] = j;
-						rowIsUsed[i] = 1;
-						columnIsUsed[j] = 1;
-						for (int t = 0; t < n; t++)
+						if (flag == 0)
 						{
-							if (mat(t, j) == 0 && zero_flag(t, j) == 0)
+							zero_flag(i, j) = 1;
+							tAssign[i] = j;
+							cnt++;
+							rowIsUsed[i] = 1;
+							columnIsUsed[j] = 1;
+							for (int t = 0; t < n; t++)
 							{
-								zero_flag(t, j) = 2;//列中其他0不可选
+								if (mat(t, j) == 0 && zero_flag(t, j) == 0)
+								{
+									zero_flag(t, j) = 2;//列中其他0不可选
+								}
 							}
+							flag = 1;
 						}
-						flag = 1;
+						else
+						{
+							zero_flag(i, j) = 2;//行中其他0不可选
+						}
 					}
-					else
-					{
-						zero_flag(i, j) = 2;//行中其他0不可选
-					}
+				}
+			}
+		}
+
+		if (cnt != n)//独立0元素 个数不足
+		{
+			//zero_flag.print();
+			//更换独立0元素位置，看是否能增加独立0个数
+			for (int i = 0; i < n; i++)
+			{
+				if (rowIsUsed[i] == 0)
+				{
+					map<int, vector<int>>route_list;//记录替换路径中的每个0元素位置
+					vector<vector<int>>one_list;
+					bool iffind = false;
+					try_assign(n, i, tAssign, rowIsUsed, columnIsUsed, zero_flag, route_list, one_list, iffind);
 				}
 			}
 		}
 	}
 
-	//zero_flag.print();
-	//更换独立0元素位置，看是否能增加独立0个数
-	for (int i = 0; i < n; i++)
-	{
-		if (rowIsUsed[i] == 0)
-		{
-			map<int, vector<int>>route_list;//记录替换路径中的每个0元素位置
-			vector<vector<int>>one_list;
-			bool iffind = false;
-			try_assign(n, i, tAssign, rowIsUsed, columnIsUsed, zero_flag, route_list, one_list, iffind);
-		}
-	}
+	
+	
 
 	for (int i = 0; i < n; i++)
 		assign[i] = tAssign[i];
@@ -1838,7 +1850,7 @@ void SchedulingBS::MuMimoFeedback(int msID, int type)
 	
 	double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6 / 1000;
 	arma::cx_mat tempRI, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
-	arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
+	arma::vec FrequencySinr(Sim.scheduling->numRB), temps;
 	arma::cx_mat *analogCodebook, *digitalCodebook;
 	if (type == 0)
 	{
@@ -1868,7 +1880,7 @@ void SchedulingBS::MuMimoFeedback(int msID, int type)
 		{
 			for (int digitalbeam = 0; digitalbeam < Sim.channel->NumberOfTransmitAntennaPort * 2; digitalbeam++)
 			{
-				for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+				for (int RBindex = 0; RBindex < (Sim.scheduling->numRB); RBindex++)
 				{
 					tempM = MS[msID]->channel->FrequencyChannel(0, 0, RBindex).t() * analogCodebook[analogbeam] * digitalCodebook[digitalbeam];
 					tempIRC = tempM.t()*(tempM*tempM.t() + tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i();
@@ -1881,7 +1893,7 @@ void SchedulingBS::MuMimoFeedback(int msID, int type)
 			}
 		}
 
-		for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+		for (int RBindex = 0; RBindex < (Sim.scheduling->numRB); RBindex++)
 		{
 			tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 			for (int si = 1; si < SLS_MAX_BS; si++)
@@ -1898,7 +1910,7 @@ void SchedulingBS::MuMimoFeedback(int msID, int type)
 	}
 	
 
-	MS[msID]->scheduling->uplinkspectralEfficiency = GetSpectralEfficiency(10.0 * log10(pow(2, sum(log2(1.0 + FrequencySinr)) / (Sim.channel->NRuRLLC.bandwidth / 10 * 50)) - 1), MS[msID]->scheduling->MCS);
+	MS[msID]->scheduling->uplinkspectralEfficiency = GetSpectralEfficiency(10.0 * log10(pow(2, sum(log2(1.0 + FrequencySinr)) / (Sim.scheduling->numRB)) - 1), MS[msID]->scheduling->MCS);
 	
 }
 

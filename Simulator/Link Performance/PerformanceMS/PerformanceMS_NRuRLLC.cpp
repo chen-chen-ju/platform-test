@@ -189,7 +189,7 @@ void PerformanceMS::MeasureSCMA(vector <int> RB_list, TB TransBlock)
 	}
 	else
 	{
-		MS[id]->scheduling->ReceivedSINR(TransBlock);
+		MS[id]->scheduling->ReceivedSINR(TransBlock, MMSE);
 		instantThroughput = TransBlock.TBsize;
 	}
 	downlinkThroghput = instantThroughput;

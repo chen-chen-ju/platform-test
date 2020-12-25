@@ -51,7 +51,7 @@ void ChannelMS::Initialize(int msID)
 	antennaOrientation(1, 0) = 90.0*PI / 180;
 	antennaOrientation(2, 0) = 0;
 	pathloss.zeros(19);
-	AtennaGain.zeros(57);
+	//AtennaGain.zeros(57);
 	channelCondition0.resize(19);
 	//cout << channelCondition << endl; //没有初始化，默认为0，有LOS径
 	//complex<double> vector;
@@ -107,7 +107,7 @@ void ChannelMS::LongTermChannel(int msID) {
 
 void ChannelMS::ShortTermChannel(int msID) {
 	
-	
+	/*
 	if (Sim.TTI + Sim.OFDM > 0)
 	{
 		//每次short-term应该重新计算小尺度参数
@@ -120,15 +120,17 @@ void ChannelMS::ShortTermChannel(int msID) {
 		ChannelCoefficient(msID);
 		ApplyPathLossAndShadowing(msID);
 	}
-	
+	*/
 	DftParameterSetting(msID);
 	DiscreteFourierTransform(msID);
-	/*if (Sim.TTI == (MS[msID]->network->bufferTime + MS[msID]->network->interArrivalTime(MS[msID]->network->arrivalTime)))
+	/*
+	if (Sim.TTI == (MS[msID]->network->bufferTime + MS[msID]->network->interArrivalTime(MS[msID]->network->arrivalTime)))
 	{
 		MS[msID]->network->msBuffer = MS[msID]->network->msBuffer + Sim.network->bufferSize;
 		MS[msID]->network->bufferTime = Sim.TTI;
 		MS[msID]->network->arrivalTime++;
-	}*/
+	}
+	*/
 }
 
 void ChannelMS::GeneralParameters(int msID, int site) {

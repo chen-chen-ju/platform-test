@@ -98,7 +98,7 @@ public:
 // MS specific Channel coefficient
 	//double pathloss;
 	arma::vec pathloss;
-	arma::vec AtennaGain;
+	//arma::vec AtennaGain;
 	double maxClusterPower;
 	arma::mat largeScaleParameter;
 	arma::mat delay;

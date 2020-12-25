@@ -73,19 +73,19 @@ void PerformanceBS::Measure()
 		}
 		*/
 		//从各个用户顺序测量，转化为根据TB，对有进行传输的用户进行测量
-		ofstream outFile;
+		//ofstream outFile;
 		for (int i = 0; i < BS[id]->scheduling->TB_entity.size(); i++)
 		{
 			TB temp = BS[id]->scheduling->TB_entity[i];
 			int msid = temp.TB_ID;
 			map<int, vector <int>>::iterator iter = BS[id]->scheduling->allocationMapMS.find(msid);
 			
-			outFile.open("../../Simulator/Data/Output Data/TB_NuRllc.txt", ios::app);
-			outFile <<Sim.TTI<< setw(7) << id << setw(7) << temp.TB_ID << setw(8) << iter->second[0] << setw(9) << temp.numRB << setw(9) << (int)temp.TBsize << setw(7) << temp.TBmcs << setw(6) << temp.rettime << setw(7) << temp.eSINR << endl;
+			//outFile.open("../../Simulator/Data/Output Data/TB_NuRllc.txt", ios::app);
+			//outFile <<Sim.TTI<< setw(7) << id << setw(7) << temp.TB_ID << setw(8) << iter->second[0] << setw(9) << temp.numRB << setw(9) << (int)temp.TBsize << setw(7) << temp.TBmcs << setw(6) << temp.rettime << setw(7) << temp.eSINR << endl;
 			
 			MS[msid]->performance->Measure(iter->second, temp);
 		}
-		outFile.close();
+		//outFile.close();
 
 	}
 

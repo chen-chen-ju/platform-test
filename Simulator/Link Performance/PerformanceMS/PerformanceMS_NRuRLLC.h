@@ -49,16 +49,19 @@ class PerformanceMS
 public:
 	int id; // MS ID
 	double uplinkThroghput; // Throughput
-	double downlinkThroghput;
+	double downlinkThroghput;//考虑了出错情况，出错认为是0
+	double downlinkaveragedThroghput;//用来统计的平均吞吐量，和PF使用的不同。
+	double PFThroghput;//PF统计的每次吞吐量，不考虑是否传输成功
 	double instantThroughput;
 	double instantThroughput0;
 	int packet, error_packet;
 	double receivedSinr;
 	vector<int> delay_status;//记录每个分割序号的使用情况，0代表未被使用；1代表已有一个包到达，等待另一个包到达
-	vector<double> delay_list;//记录每个分割序号的第一个包到达时间
-	double delay;
+	vector<int> delay_list;//记录每个分割序号的第一个包到达时间
+	int delay;//OFDM符号为单位
 	void Initialize(int ms); // Initialization
 	void Measure(vector <int> RB_list, TB Transblock); // Throughput measurement
+	void MeasureSCMA(vector <int> RB_list, TB TransBlock);
 	double FER(double SINR, int MCS);
 	void ConcludeIteration(); // Iteration conclusion
 	void Conclude(); // Simulation conclusion

@@ -104,12 +104,13 @@ void Performance::Measure()
 	{
 		for (int msID = 0; msID < Sim.network->numMS; msID++)
 		{
-			MS[msID]->scheduling->downlinkaveragedThroghput = MS[msID]->scheduling->downlinkaveragedThroghput * (Sim.TTI) / (Sim.TTI + 1) + MS[msID]->performance->downlinkThroghput / (Sim.TTI + 1);
+			MS[msID]->performance->downlinkaveragedThroghput = MS[msID]->performance->downlinkaveragedThroghput * (double)((Sim.TTI) / (Sim.TTI + 1.0)) + MS[msID]->performance->downlinkThroghput / (Sim.TTI + 1.0);
+			MS[msID]->scheduling->downlinkaveragedThroghput = MS[msID]->scheduling->downlinkaveragedThroghput * (double)((Sim.TTI) / (Sim.TTI + 1.0)) + MS[msID]->performance->PFThroghput / (Sim.TTI + 1.0);
 		}
 	}
 	for (int msID = 0; msID < Sim.network->numUMS; msID++)
 	{
-		UMS[msID]->scheduling->downlinkaveragedThroghput = UMS[msID]->scheduling->downlinkaveragedThroghput*(Sim.TTI) / (Sim.TTI + 1) + UMS[msID]->performance->downlinkThroghput / (Sim.TTI + 1);
+		UMS[msID]->performance->downlinkaveragedThroghput = UMS[msID]->performance->downlinkaveragedThroghput*(Sim.TTI) / (Sim.TTI + 1.0) + UMS[msID]->performance->downlinkThroghput / (Sim.TTI + 1.0);
 	}
 
 	cout << "******** Average Throughput Calculated ********" << endl;

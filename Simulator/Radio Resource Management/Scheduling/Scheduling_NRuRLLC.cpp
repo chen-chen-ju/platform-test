@@ -61,10 +61,12 @@ void Scheduling::Initialize(string fileName)
 			else if (result[0] == "numCBG") numCBG = stoi(result[1]);
 			else if (result[0] == "realisticFeedback") realisticFeedback = stoi(result[1]);
 			else if (result[0] == "realisticChannelEstimation") realisticChannelEstimation = stoi(result[1]);
+			else if (result[0] == "ifuseSCMA") UseSCMA = stoi(result[1]);
+			else if (result[0] == "SCMAmodel") SCMAmodel = stoi(result[1]);
 		}
 	}
 	numMaxLayer = 1;
-	resource_used.zeros(Sim.network->numBS, numRB);
+	resource_used.zeros(Sim.network->numMacroBS * Sim.network->numSector, numRB);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -87,6 +89,7 @@ void Scheduling::BufferUpdate()
 	for (int i = 0; i < Sim.network->numUMS; i++)
 	{
 		UMS[i]->scheduling->BufferUpdate();
+		UMS[i]->scheduling->HARQUpdate();
 	}
 	
 	if (Sim.network->bufferModel == RRM::NonFullBuffer && Sim.OFDM == 0) 
@@ -95,7 +98,13 @@ void Scheduling::BufferUpdate()
 		{
 			//MS[i]->network->BufferUpdate();
 			MS[i]->scheduling->BufferUpdate();//将buffer操作转移到scheduling模块。
+			MS[i]->scheduling->HARQUpdate();
 		}
+	}
+	else
+	{
+		for (int i = 0; i < Sim.network->numMS; i++)
+			MS[i]->scheduling->HARQUpdate();
 	}
 	
 }
@@ -120,7 +129,7 @@ void Scheduling::Schedule()
 {
 	for (int bsID = 0; bsID < Sim.network->numBS; bsID++)
 	{
-		BS[bsID]->scheduling->Schedule(bsID);
+		BS[bsID]->scheduling->RRSchedule(bsID);
 	}
 	setcolor(13, 0);
 	cout << "[Scheduling]: Base Station scheduling " << endl;

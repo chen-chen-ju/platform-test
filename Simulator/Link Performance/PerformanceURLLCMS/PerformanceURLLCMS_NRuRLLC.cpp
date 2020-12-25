@@ -48,8 +48,11 @@ void PerformanceURLLCMS::Initialize(int ms)
 	id = ms; // MS ID
 	downlinkThroghput = 0;
 	uplinkThroghput = 0;
+	downlinkaveragedThroghput = 0;
 	packet = 0;
 	error_packet = 0;
+	delay_status.resize(32);
+	delay_list.resize(32);
 }
 
 

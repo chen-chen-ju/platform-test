@@ -40,3 +40,6 @@ delay是统计所有包的总时延。
 	修改了ShortTermChannel函数，解决了每次使用，不会更新小尺度参数的问题。相应地，为了显示TTI开始时刻的RSRP，在main函数中使用了showRSRP(TTI,OFDM,UEtype)函数。
 	修改了3DSpatialChannelModel_NRuRLLC的Pathloss函数，增加了距离小于10情况下的路损定义。
 	在SystemSim使用了showht(msID,UEtype),来显示某个用户在一个TTI内的ht的变化。
+2020/12/14 细化了资源调度模块，分别为RR(轮询)、PF(比例公平)、SCMA(SCMA场景)、Mix(混合业务场景)
+2020/12/25 在SCMA场景下，实现了SCMA-PF和BSHM调度算法。
+	在Network的BS和MS部分增加了圆形放置，实现了圆形区域单小区，用户随机分布的场景。

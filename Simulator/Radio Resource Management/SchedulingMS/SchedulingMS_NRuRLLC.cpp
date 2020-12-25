@@ -171,9 +171,10 @@ static const int TransportBlockSizeTable[110][27] = {
 
 void SchedulingMS::Initialize(int ms)
 {
+	downlinkaveragedThroghput = 0;
 	subband_mcs.resize(Sim.scheduling->numRB);
 	spectralEfficiency.resize(Sim.scheduling->numRB);
-	ESINRdB.resize(Sim.scheduling->numRB);
+	ESINR.resize(Sim.scheduling->numRB);
 	id = ms; // MS ID
 	Needret = 0;
 	for (uint i = 0; i < 256; i++)
@@ -195,18 +196,6 @@ void SchedulingMS::Initialize(int ms)
 
 void SchedulingMS::BufferUpdate()//每次数据到达相当于来一个RLC SDU
 {
-	//更新HARQ buffer
-	if (HARQbuffer.size() > 0)
-	{
-		for (int i = 0; i < HARQbuffer.size(); i++)
-			HARQbuffer[i].Timer--;
-		if (HARQbuffer[0].Timer == 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
-		{
-			Needret = 1;//告诉基站要先重传
-		}
-	}
-
-
 	//更新数据Buffer
 	if ((Sim.TTI == interArrivalTime))//MS每个TTI开始调度一次
 	{
@@ -245,6 +234,20 @@ void SchedulingMS::BufferUpdate()//每次数据到达相当于来一个RLC SDU
 }
 
 
+void SchedulingMS::HARQUpdate()
+{
+	//更新HARQ buffer
+	if (HARQbuffer.size() > 0)
+	{
+		for (int i = 0; i < HARQbuffer.size(); i++)
+			HARQbuffer[i].Timer--;
+		if (HARQbuffer[0].Timer == 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
+		{
+			Needret = 1;//告诉基站要先重传
+		}
+	}
+}
+
 /*-------------------------------------------------------------------------*/
 /*                                                                         */
 /*                         METHOD                                          */
@@ -274,7 +277,7 @@ double SchedulingMS::GetSpectralEfficiency(double SINR, int &MCS)//dB的SINR
 
 }
 
-int SchedulingMS::GetTBsize(double SpectralEfficiency, double datasize)//根据传输数据大小，返回需要的PRB个数
+uint SchedulingMS::GetTBsize(double SpectralEfficiency, double datasize)//根据传输数据大小，返回需要的PRB个数
 {
 	int mcs = 0;
 	while ((mcs < 28) && (SpectralEfficiencyForMcs[mcs + 1] <= SpectralEfficiency))//mcs的是将cqi的频谱效率细化，在两端内插入一个中间点
@@ -314,8 +317,8 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 
 	if (Sim.TTI == 0)
 	{
-		double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;//不要除以1000，信号的单位是dBm
-		noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
+		double noise = pow(10, (-174.0 / 10.0)) * 200 * 1e3;//不要除以1000，信号的单位是dBm。只算一个RB带宽内的噪声功率
+		//noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 
 		arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
 		arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
@@ -363,8 +366,9 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 			interferencePlusNoise = tempIRC * (tempRI + noise * arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)) * tempIRC.t();
 			FrequencySinr(RBindex) = real(signal(0, 0)) / real(interferencePlusNoise(0, 0));
 			//subband 参数计算
-			MS[id]->scheduling->ESINRdB[RBindex] = 10.0 * log10(FrequencySinr(RBindex));
-			MS[id]->scheduling->spectralEfficiency[RBindex] = GetSpectralEfficiency(MS[id]->scheduling->ESINRdB[RBindex], MS[id]->scheduling->subband_mcs[RBindex]);
+			MS[id]->scheduling->ESINR[RBindex] = FrequencySinr(RBindex);
+			double ESINRdB = 10.0 * log10(FrequencySinr(RBindex));
+			MS[id]->scheduling->spectralEfficiency[RBindex] = GetSpectralEfficiency(ESINRdB, MS[id]->scheduling->subband_mcs[RBindex]);
 		}
 		MS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1;
 		//if (id == 0)
@@ -373,7 +377,7 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 		MS[id]->scheduling->downlinkESINRdB = 10.0 * log10(MS[id]->scheduling->downlinkESINR);
 		MS[id]->scheduling->downlinkspectralEfficiency = GetSpectralEfficiency(MS[id]->scheduling->downlinkESINRdB, MS[id]->scheduling->MCS);
 	}
-	else//当进行资源分配，信道估计根据分配情况，SINR才更贴近实际
+	else//当进行资源分配，信道估计根据上一次的分配情况，SINR才更贴近实际
 	{
 		MS[id]->scheduling->downlinkESINR = MS[id]->scheduling->downlinkESINR0 + MS[id]->scheduling->HARQeSINR;
 		MS[id]->scheduling->downlinkESINRdB = 10.0 * log10(MS[id]->scheduling->downlinkESINR);
@@ -381,7 +385,8 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 		//subband 计算
 		for (int RBindex = 0; RBindex < Sim.scheduling->numRB; RBindex++)
 		{
-			MS[id]->scheduling->spectralEfficiency[RBindex] = GetSpectralEfficiency(MS[id]->scheduling->ESINRdB[RBindex], MS[id]->scheduling->subband_mcs[RBindex]);
+			double ESINRdB = 10.0 * log10(MS[id]->scheduling->ESINR[RBindex]);
+			MS[id]->scheduling->spectralEfficiency[RBindex] = GetSpectralEfficiency(ESINRdB, MS[id]->scheduling->subband_mcs[RBindex]);
 		}
 	}
 	
@@ -389,8 +394,9 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 
 void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 {
-	double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;//不要除以1000，信号的单位是dBm
-	noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
+	//double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;//不要除以1000，信号的单位是dBm
+	double noise = pow(10, (-174.0 / 10.0)) * 200 * 1e3;
+	//noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 	arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
 	arma::vec temps; //10M带宽有50个RB
 
@@ -458,7 +464,7 @@ void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 		interferencePlusNoise = tempIRC*(tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort))*tempIRC.t();
 		//对于一个基站的接收信号，其他基站信号为干扰
 		FrequencySinr(i) = real(signal(0, 0)) / real(interferencePlusNoise(0, 0));
-		ESINRdB[RBindex] = 10.0 * log10(FrequencySinr(i));
+		MS[id]->scheduling->ESINR[RBindex] = FrequencySinr(i) + Tran.eSINR;
 		//spectralEfficiency[RBindex] = GetSpectralEfficiency(FrequencySinr(i), subband_mcs[RBindex]);
 	}
 	//if (id == 0)

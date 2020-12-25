@@ -57,6 +57,7 @@ void NetworkBS::Initialize(int bs, int site, int sector, SLS::BsType bsType)
 	if (Sim.network->NetworkModel == NETWORK::UrbanMacroCell)
 	{
 		PlaceHexagonal();
+		//PlaceCircular();
 	}
 }
 
@@ -104,12 +105,15 @@ void NetworkBS::PlaceRectangular()
 
 void NetworkBS::PlaceCircular()
 {
-
+	//单小区，圆形范围
 	// Place in a random pattern
-	arma::cx_double p;
-	double A = sqrt(3) / 2;
-	int macroTomicroCheck = 0; // 1 true, 0 false
-	double normalizedMacroToMacro = Sim.network->UrbanMacroCell.interSiteDistance / sqrt(3);
+	//arma::cx_double p;
+	//double A = sqrt(3) / 2;
+	//int macroTomicroCheck = 0; // 1 true, 0 false
+	//double normalizedMacroToMacro = Sim.network->UrbanMacroCell.interSiteDistance / sqrt(3);
+	this->pos = arma::cx_double(0, 0);
+	this->pos3D << 0.0 << 0.0 << 0.0;
+	
 	
 }
 

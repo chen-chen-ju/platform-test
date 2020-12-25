@@ -163,19 +163,22 @@ void Network::PlaceWraparound()
 void Network::Conclude()
 {
 	//新加的析构
+	/*
 	delete[] sectorAngle;
 	for (int bsID = 0; bsID < Sim.network->numBS; bsID++)
 		delete BS[bsID];
-	//delete[] BS;
+	*/
 }
 
 void Network::ConcludeIteration()
 {
 
 	//新加的析构，保证每次仿真结束后，空间的释放
+	/*
 	for (int msID = 0; msID < Sim.network->numMS; msID++)
 		delete MS[msID];
 	for (int umsID = 0; umsID < Sim.network->numMS; umsID++)
 		delete UMS[umsID];
+	*/
 
 }

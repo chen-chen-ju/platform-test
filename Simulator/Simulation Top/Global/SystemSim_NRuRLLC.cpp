@@ -37,7 +37,6 @@ when		who				what, where, why
 
 #include "SystemSim_NRuRLLC.h"
 
-
 /*-------------------------------------------------------------------------*/
 /*                                                                          */
 /*                   SLS Simulator class Initialize                         */
@@ -49,8 +48,8 @@ int main()
 	Sim.network->PlaceMacroBS(); // Macro BS placement
 	for (int i = 0; i < Sim.numIteration; i++)
 	{
-		//srand(10);
-		srand(time(NULL));
+		srand(10);
+		//srand(time(NULL));
 		Sim.network->PlaceEMBBMS(); // eMBB MS placement (Full buffer)
 		Sim.network->PlaceURLLCMS(); // uRLLC MS placement (non-Full buffer)
 		Sim.network->PlaceWraparound();
@@ -222,8 +221,8 @@ void SystemSim::Demonstration() {
 			double couplingloss = 10.0 * log10(MS[msID]->channel->CouplingLoss(bsID).real());
 			double pathloss = MS[msID]->channel->pathloss(bsID/3);
 			//outFile << "x:  " << BS[bsID]->network->pos3D(0, 0) << "	y:  " << BS[bsID]->network->pos3D(0, 1) << "  z:   " << BS[bsID]->network->pos3D(0, 2) << endl;
-			//outFile  <<  msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 0) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << "    " << MS[msID]->network->location << endl;
-			outFile << msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << pathloss << " "<<sqrt(distance0) << endl;
+			outFile  <<  msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 0) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "    " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << "    " << MS[msID]->network->location << endl;
+			//outFile << msID << "	 " << bsID << "	 " << MS[msID]->scheduling->downlinkESINRdB << "    " << pathloss << " "<<sqrt(distance0) << endl;
 			//outFile << MS[msID]->network->wraparoundposBS(bsID/3, 0) << "	 " << MS[msID]->network->wraparoundposBS(bsID / 3, 1) << "	 " << MS[msID]->network->wraparoundposBS(bsID / 3, 2) << endl;
 		}
 	}

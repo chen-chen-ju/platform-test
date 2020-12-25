@@ -60,7 +60,7 @@ public:
 	//每个RB上的信息,in_band
 	vector<int> subband_mcs;//带内MCS，每个RB上的SINR情况
 	vector<double>spectralEfficiency;//每个RB上的频谱效率
-	vector<double>ESINRdB;//
+	vector<double>ESINR;//
 
 	vector<HARQentity> HARQbuffer;
 
@@ -89,12 +89,13 @@ public:
 
 	void Initialize(int ms);
 	void BufferUpdate();
+	void HARQUpdate();
 	void Feedback(enum Receive_mode mode);//0是MMSE,1是ZF
 	//void MuMimoFeedback(int msID, int type);
 	void ReceivedSINR(TB Tran, enum Receive_mode mode);
 	arma::cx_mat* PrecodingMatrix(enum Precoding_Matrix precodingtype, arma::cx_mat *codebook, int type);
 	double GetSpectralEfficiency(double SINR, int &MCS);
-	int GetTBsize(double SpectralEfficiency, double datasize);
+	uint GetTBsize(double SpectralEfficiency, double datasize);
 	double GetTBsize(double SpectralEfficiency, int nprb);
 	void Reset(int MSID);
 	void ConcludeIteration(); // Iteration conclusion

@@ -47,7 +47,9 @@ void PerformanceMS::Initialize(int ms)
 {
 	id = ms; // MS ID
 	downlinkThroghput = 0;
+	PFThroghput = 0;
 	uplinkThroghput = 0;
+	downlinkaveragedThroghput = 0;
 	packet = 0;
 	error_packet = 0;
 	delay_status.resize(32);
@@ -79,18 +81,20 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 			MS[id]->scheduling->ReceivedSINR(TransBlock, MMSE);
 			double temp = MS[id]->scheduling->downlinkESINR;
 			double TB_size = TransBlock.TBsize;//MS[id]->scheduling->GetTBsize(MS[id]->scheduling->downlinkspectralEfficiency, num_RB)
+			PFThroghput = TB_size;
 			double val = FER(temp, MS[id]->scheduling->MCS);
 			if (arma::randu() > val)
 			{
 				instantThroughput = TB_size * 1000;
 				instantThroughput0 = 15000*log2(1 + temp);
-				if (TransBlock.rettime == 0)//除了初传，其他情况都保存在HARQ缓存里
+				if (Sim.network->bufferModel == RRM::NonFullBuffer && TransBlock.rettime == 0)//除了初传，其他情况都保存在HARQ缓存里
 				{
 					MS[id]->scheduling->msBuffer = MS[id]->scheduling->msBuffer - TB_size;
 					if (MS[id]->scheduling->msBuffer < 0)
 						MS[id]->scheduling->msBuffer = 0;
 				}
 				vector<Packet>temp = TransBlock.pack;
+				//处理包的时延，整合包的分割
 				for (auto v : temp)
 				{
 					if (v.Getdivide())
@@ -100,7 +104,7 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 							cout << "出错：分割索引号超出预设范围" << endl;
 						else
 						{
-							if (delay_status[index]<0 || delay_status[index] >1)
+							if (delay_status[index] < 0 || delay_status[index] >1)
 								cout << "出错：分割包状态错误" << endl;
 							else if (delay_status[index] == 0)
 							{
@@ -117,18 +121,15 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 								MS[id]->scheduling->index.push_back(index);
 							}
 						}
-						
+
 					}
 				}
-				//MS[id]->scheduling->HARQeSINR = 0;
-				TransBlock.eSINR = 0;
-				//MS[id]->scheduling->Maxrettime = 0;
+				
 			}
 			else
 			{
-				instantThroughput = 0.1;
-				instantThroughput0 = 0.1;
-				//MS[id]->scheduling->HARQeSINR = MS[id]->scheduling->HARQeSINR + temp;
+				instantThroughput = 0;
+				instantThroughput0 = 0;
 				error_packet++;
 				/*
 				MS[id]->scheduling->Maxrettime += 1;
@@ -151,7 +152,7 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 				}
 				*/
 				TransBlock.eSINR = TransBlock.eSINR + temp;
-				if (TransBlock.rettime == 0)
+				if (Sim.network->bufferModel == RRM::NonFullBuffer && TransBlock.rettime == 0)//只有non-full情况下需要更新缓存
 				{
 					MS[id]->scheduling->msBuffer -= TB_size;
 					if (MS[id]->scheduling->msBuffer < 0)
@@ -176,7 +177,22 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 	}
 
 	downlinkThroghput = instantThroughput;
-	//downlinkThroghput = downlinkThroghput * (Sim.TTI) / (Sim.TTI + 1) + instantThroughput / (Sim.TTI + 1);
+}
+
+void PerformanceMS::MeasureSCMA(vector <int> RB_list, TB TransBlock)
+{
+	int num_RB = RB_list.size();
+	if (num_RB == 0)
+	{
+		instantThroughput = 0;
+		instantThroughput0 = 0;
+	}
+	else
+	{
+		MS[id]->scheduling->ReceivedSINR(TransBlock);
+		instantThroughput = TransBlock.TBsize;
+	}
+	downlinkThroghput = instantThroughput;
 }
 
 double PerformanceMS::FER(double SINR, int MCS)//误块率，TB传输出错概率

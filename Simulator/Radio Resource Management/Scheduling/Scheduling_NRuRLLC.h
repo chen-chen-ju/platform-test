@@ -95,12 +95,14 @@ public:
 	enum RRM::Scheduling_Algorithm algorithm; // Scheduling algorithm
 	int numMaxLayer;
 	int numRB; // # of resource blocks
-	int numCB;
+	int numCB;//码本
 	int numCBG;
 	int realisticFeedback; // 0: Ideal, 1: Realistic	
 	int realisticChannelEstimation; // 0: Ideal, 1: Realistic
 	double dataSize;
 	arma::imat resource_used;//nums_BS*RB,记录每个基站使用的资源
+	bool UseSCMA;
+	int SCMAmodel;
 
 	void Initialize(string fileName); // Scheduling initialization
 	void FrameStructure(SLS::TDDType tddtype); // MS feedback

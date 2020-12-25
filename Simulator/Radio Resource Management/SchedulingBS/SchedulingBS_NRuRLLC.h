@@ -68,16 +68,34 @@ public:
 	vector<TB> TB_entityUMS;//UMS用户的TB集合
 	vector<double> ratio;//记录功率分配系数，和为1
 
+	vector<vector<int>>CBlist;//每个CB对应的RB序号
+
 	double downlinkBuffer;
 	double uplinkBuffer;
 	arma::cx_mat precodingMatrix; //Mat<cx_double> cx_表示复数类型 
 	MuMimo_Schedule_Parameter MuMimoScheduleParameter;
 	arma::vec framestructure;
 	void Initialize(int bs);
+	void RBtoCB(int id, int model);//码本生成方式
 	void FrameStructure(int bsID, SLS::TDDType tddtype);
-	void Schedule(int bsID);
+	void PFSchedule(int bsID);//比例公平
+	void RRSchedule(int bsID);//轮询
+	void MixSchedule(int bsID);//混合业务
+	void SCMASchedule(int bsID);//BSHM
+	void SCMAPF(int bsID);//SCMA-PF
 	void quickly_sort(arma::vec PFMetric, int begin, int end, int* index);
-	void ReleaseRB(int umsID);
+	void quickly_sort(vector<double>& PFMetric, int begin, int end, vector<int>& index);
+
+	void GetUElist(int bsID, int& num_MS, vector<int>& UE_list);
+
+	//-----------匈牙利算法相关函数---------------------
+	void try_assign(int& n, int& rowid, vector<int>& tAssign, vector<bool>& rowIsUsed, vector<bool>& columnIsUsed, arma::imat& zero_flag, map<int, vector<int>>& route_list, vector<vector<int>>& one_list, bool& iffind);
+	void rowSub(int n, arma::imat& mat);
+	void columnSub(int n, arma::imat& mat);
+	bool isOptimal(int n, vector<int>& assign, arma::imat& mat);
+	void matTrans(int n, vector<int>& assign, arma::imat& mat);
+	void Hungarian(vector<int>& assign, arma::imat& mat);
+
 	void MuMimoSchedule(int bsID, int subband, arma::uvec scheduluedMS, int link);
 	void printCombination(arma::uvec arr, arma::uvec groupMetric, double value, int n, int r, int link);
 	void combinationUtil(arma::uvec arr, arma::uvec data, arma::uvec groupMetric, double value, int start, int end, int index, int r, int link);

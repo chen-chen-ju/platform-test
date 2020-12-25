@@ -55,6 +55,7 @@ void NetworkMS::Initialize(int msID, int bsID)
 	// MS Placement
 	if (Sim.network->NetworkModel == NETWORK::UrbanMacroCell){
 		this->PlaceRandomHexagonal(); 
+		//this->PlaceRandomCircle();
 	}
 	/*
 	if (Sim.network->bufferModel == RRM::FullBuffer) {
@@ -83,6 +84,19 @@ void NetworkMS::BufferUpdate()
 	
 }
 */
+
+void NetworkMS::PlaceRandomCircle()//单小区，圆形区域
+{
+	//arma::cx_double p;
+	double R = 40 + (Sim.network->UrbanMacroCell.interSiteDistance - 40) * sqrt(arma::randu());
+	double sita = 2 * PI * arma::randu();
+	this->location = Outdoor;
+	this->indoorDistance2D = 0;
+	pos.real(R * sin(sita));
+	pos.imag(R * cos(sita));
+	this->pos3D << pos.real() << pos.imag() << height;
+}
+
 
 //位置是相对位置加绝对位置，基站是绝对位置
 void NetworkMS::PlaceRandomHexagonal()
@@ -220,8 +234,20 @@ arma::mat NetworkMS::LargeScaleParameter(int channelModel, int channelCondition,
 void NetworkMS::Associate(int msID, arma::vec RSRP)
 {
 	arma::uvec interferenceIndex(SLS_MAX_BS); interferenceIndex.zeros(SLS_MAX_BS);
+	/*
+	if (msID == 7)
+	{
+		RSRP.print();
+	}
+	*/
 	arma::uvec indices; indices.zeros(SLS_MAX_BS);	
 	indices = arma::sort_index(RSRP, "descend");
+	/*
+	if (msID == 7)
+	{
+		indices.print();
+	}
+	*/
 	for (int l = 0; l < Sim.network->numBS; l++)
 	{
 		interferenceIndex(l) = indices(l);

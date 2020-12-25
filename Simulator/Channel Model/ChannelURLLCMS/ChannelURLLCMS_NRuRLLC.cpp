@@ -764,7 +764,7 @@ void ChannelURLLCMS::DftParameterSetting(int src)
 	{
 		int siIndex = UMS[src]->channel->BSindex(si);
 
-		for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++)
+		for (int c = 0; c < (Sim.scheduling->numRB); c++)
 		{
 			UMS[src]->channel->DftParameter(si, c).zeros(1, MAX_CLUSTER + 4);
 			//int f = 213 + c * 12 + 6;
@@ -849,7 +849,7 @@ void ChannelURLLCMS::DiscreteFourierTransform(int src)
 					//h_k.col(n) = h_k.col(n) + UMS[src]->channel->HtLOS(si, pr);
 				}
 			}
-			for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++) {
+			for (int c = 0; c < (Sim.scheduling->numRB); c++) {
 				tmpp = UMS[src]->channel->DftParameter(si, c) * strans(h_k);//只转置，不取共轭
 				UMS[src]->channel->FrequencyChannel(si, pr, c).zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfTransmitAntennaPort);
 

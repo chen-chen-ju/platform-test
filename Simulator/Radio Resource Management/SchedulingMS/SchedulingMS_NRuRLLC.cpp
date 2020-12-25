@@ -321,7 +321,7 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 		//noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 
 		arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
-		arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
+		arma::vec FrequencySinr(Sim.scheduling->numRB), temps;
 
 		tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 		tempRHr.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
@@ -338,7 +338,7 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 		}
 		*/
 
-		for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+		for (int RBindex = 0; RBindex < (Sim.scheduling->numRB); RBindex++)
 		{
 			//MS[id]->channel->FrequencyChannel(0, 0, RBindex) = MS[id]->channel->FrequencyChannel(0, 0, RBindex);
 			MS[id]->channel->FrequencyChannel(0, 0, RBindex) = MS[id]->channel->FrequencyChannel(0, 0, RBindex) / sqrt(double(Sim.channel->NumberOfTransmitAntennaPort));//发射天线均分功率

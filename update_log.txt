@@ -43,3 +43,4 @@ delay是统计所有包的总时延。
 2020/12/14 细化了资源调度模块，分别为RR(轮询)、PF(比例公平)、SCMA(SCMA场景)、Mix(混合业务场景)
 2020/12/25 在SCMA场景下，实现了SCMA-PF和BSHM调度算法。
 	在Network的BS和MS部分增加了圆形放置，实现了圆形区域单小区，用户随机分布的场景。
+	将Sim.channel->NRuRLLC.bandwidth / 10 * 50全部统一为Sim.scheduling->numRB。

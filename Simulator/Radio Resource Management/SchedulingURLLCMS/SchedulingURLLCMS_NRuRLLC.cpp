@@ -171,6 +171,7 @@ static const int TransportBlockSizeTable[110][27] = {
 
 void SchedulingURLLCMS::Initialize(int ms) //Network::PlaceURLLCMS()
 {
+	downlinkaveragedThroghput = 0;
 	subband_mcs.resize(Sim.scheduling->numRB);
 	spectralEfficiency.resize(Sim.scheduling->numRB);
 	ESINRdB.resize(Sim.scheduling->numRB);
@@ -198,16 +199,6 @@ void SchedulingURLLCMS::Initialize(int ms) //Network::PlaceURLLCMS()
 /*-------------------------------------------------------------------------*/
 void SchedulingURLLCMS::BufferUpdate()
 {
-	if (HARQbuffer.size() > 0)
-	{
-		for (int i = 0; i < HARQbuffer.size(); i++)
-			HARQbuffer[i].Timer--;
-		if (HARQbuffer[0].Timer == 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
-		{
-			Needret = 1;//告诉基站要先重传
-		}
-	}
-
 	if ((14*Sim.TTI+Sim.OFDM == interArrivalTime))
 	{
 		msBuffer = msBuffer + dataSize;
@@ -242,6 +233,18 @@ void SchedulingURLLCMS::BufferUpdate()
 	}
 
 }
+void SchedulingURLLCMS::HARQUpdate()
+{
+	if (HARQbuffer.size() > 0)
+	{
+		for (int i = 0; i < HARQbuffer.size(); i++)
+			HARQbuffer[i].Timer--;
+		if (HARQbuffer[0].Timer == 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
+		{
+			Needret = 1;//告诉基站要先重传
+		}
+	}
+}
 
 double SchedulingURLLCMS::GetSpectralEfficiency(double SINR, int &MCS)
 {   
@@ -265,7 +268,7 @@ double SchedulingURLLCMS::GetSpectralEfficiency(double SINR, int &MCS)
 	//这是16个CQI对应的指标
 }
 
-int SchedulingURLLCMS::GetTBsize(double SpectralEfficiency,double datasize)
+uint SchedulingURLLCMS::GetTBsize(double SpectralEfficiency,double datasize)
 {
 	int mcs = 0;
 	while ((mcs < 28) && (SpectralEfficiencyForMcs[mcs + 1] <= SpectralEfficiency))
@@ -311,7 +314,7 @@ void SchedulingURLLCMS::Feedback(enum Receive_mode mode)
 		noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 
 		arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
-		arma::vec FrequencySinr(Sim.channel->NRuRLLC.bandwidth / 10 * 50), temps;
+		arma::vec FrequencySinr(Sim.scheduling->numRB), temps;
 
 		tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
 		tempRHr.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);
@@ -325,7 +328,7 @@ void SchedulingURLLCMS::Feedback(enum Receive_mode mode)
 		}
 		*/
 
-		for (int RBindex = 0; RBindex < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); RBindex++)
+		for (int RBindex = 0; RBindex < (Sim.scheduling->numRB); RBindex++)
 		{
 			//UMS[id]->channel->FrequencyChannel(0, 0, RBindex) = UMS[id]->channel->FrequencyChannel(0, 0, RBindex);
 			tempRHr = UMS[id]->channel->FrequencyChannel(0, 0, RBindex) * UMS[id]->channel->FrequencyChannel(0, 0, RBindex).t() / double(Sim.channel->NumberOfTransmitAntennaPort);

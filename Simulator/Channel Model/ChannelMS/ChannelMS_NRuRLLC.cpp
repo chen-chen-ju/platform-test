@@ -885,7 +885,7 @@ void ChannelMS::DftParameterSetting(int src)
 	{
 		int siIndex = MS[src]->channel->BSindex(si);
 
-		for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++)
+		for (int c = 0; c < (Sim.scheduling->numRB); c++)
 		{
 			MS[src]->channel->DftParameter(si, c).zeros(1, MAX_CLUSTER + 4);
 			//int f = 213 + c * 12 + 6;//4GHZ 感觉应该是19975*12+c*12
@@ -1002,7 +1002,7 @@ void ChannelMS::DiscreteFourierTransform(int src)
 				t = 1;
 			}
 			*/
-			for (int c = 0; c < (Sim.channel->NRuRLLC.bandwidth / 10 * 50); c++) {
+			for (int c = 0; c < (Sim.scheduling->numRB); c++) {
 				
 				/*
 				if (src==3 && si < 3 && c<2)

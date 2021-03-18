@@ -199,35 +199,35 @@ void SchedulingURLLCMS::Initialize(int ms) //Network::PlaceURLLCMS()
 /*-------------------------------------------------------------------------*/
 void SchedulingURLLCMS::BufferUpdate()
 {
-	if ((14*Sim.TTI+Sim.OFDM == interArrivalTime))
+	if ((14*Sim.TTI+Sim.OFDM >= interArrivalTime))
 	{
 		msBuffer = msBuffer + dataSize;
-		interArrivalTime = ceil(-(1 / Sim.network->meanArrivalTime)*log(1 - arma::randu()) * 4 * 10 / 5);// * 10 / 5是因为泊松强度为1/2（Sim.network->meanArrivalTime=2）    强度为1的possion分布
-		if (interArrivalTime < 4)
-			interArrivalTime = 4;//保证两次数据包间隔大于4个OFDM符号
+		interArrivalTime = ceil(-(2*Sim.network->meanArrivalTime)*log(1 - arma::randu()));// * 10 / 5是因为泊松强度为1/2（Sim.network->meanArrivalTime=2）    强度为1的possion分布
+		//if (interArrivalTime < 4)
+			//interArrivalTime = 4;//保证两次数据包间隔大于4个OFDM符号
 		interArrivalTime = interArrivalTime + 14 * Sim.TTI + Sim.OFDM;
-		//cout << "ID:  " << id << "  arrivaltime:  " << interArrivalTime << endl;
-		//cout << "msBuffer:  " << msBuffer << endl;
+
 
 		//对packet缓存进行操作
 		Packet newpakcket;
 		uint num = (uint)dataSize / newpakcket.GetSize();
 		uint res = (uint)dataSize % newpakcket.GetSize();
+		msBuffer += (num + 1) * newpakcket.GetHead();
 		for (uint i = 0; i < num; i++)
 		{
 			if (index.size() == 0)
 				cout << "警告：缓存区数据包个数超过了256" << endl;
-			newpakcket.SetID(index[0]);//packet的唯一标识
-			index.erase(index.begin());
+			//newpakcket.SetID(index[0]);//packet的唯一标识
+			//index.erase(index.begin());
 			PacketBuffer.push_back(newpakcket);
 		}
 		if (res > 0)//最后一个包可能不是填满的
 		{
 			if (index.size() == 0)
 				cout << "警告：缓存区数据包个数超过了256" << endl;
-			newpakcket.SetID(index[0]);
+			//newpakcket.SetID(index[0]);
 			newpakcket.SetSize(res);
-			index.erase(index.begin());
+			//index.erase(index.begin());
 			PacketBuffer.push_back(newpakcket);
 		}
 	}
@@ -239,7 +239,7 @@ void SchedulingURLLCMS::HARQUpdate()
 	{
 		for (int i = 0; i < HARQbuffer.size(); i++)
 			HARQbuffer[i].Timer--;
-		if (HARQbuffer[0].Timer == 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
+		if (HARQbuffer[0].Timer <= 0)//一个用户的HARQ缓存的timer一定是严格递减的，一个时刻至多一个包可以重传
 		{
 			Needret = 1;//告诉基站要先重传
 		}
@@ -352,12 +352,12 @@ void SchedulingURLLCMS::Feedback(enum Receive_mode mode)
 			spectralEfficiency[RBindex] = GetSpectralEfficiency(UMS[id]->scheduling->ESINRdB[RBindex], UMS[id]->scheduling->subband_mcs[RBindex]);
 		}
 
-		UMS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1;
-		UMS[id]->scheduling->downlinkESINR = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1 + UMS[id]->scheduling->HARQeSINR;
+		UMS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / (Sim.scheduling->numRB)) - 1;
+		UMS[id]->scheduling->downlinkESINR = UMS[id]->scheduling->downlinkESINR0 + UMS[id]->scheduling->HARQeSINR;
 		UMS[id]->scheduling->downlinkESINRdB = 10.0 * log10(UMS[id]->scheduling->downlinkESINR);
 		UMS[id]->scheduling->downlinkspectralEfficiency = GetSpectralEfficiency(UMS[id]->scheduling->downlinkESINRdB, UMS[id]->scheduling->MCS);
 	}
-	else
+	else//用前一时刻的信息
 	{
 		UMS[id]->scheduling->downlinkESINR = UMS[id]->scheduling->downlinkESINR0 + UMS[id]->scheduling->HARQeSINR;
 		UMS[id]->scheduling->downlinkESINRdB = 10.0 * log10(UMS[id]->scheduling->downlinkESINR);
@@ -368,6 +368,8 @@ void SchedulingURLLCMS::Feedback(enum Receive_mode mode)
 			UMS[id]->scheduling->spectralEfficiency[RBindex] = GetSpectralEfficiency(UMS[id]->scheduling->ESINRdB[RBindex], UMS[id]->scheduling->subband_mcs[RBindex]);
 		}
 	}
+	//记录信道更新时间
+	UMS[id]->channel->lasttime = Sim.TTI+1;
 }
 
 void SchedulingURLLCMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
@@ -438,9 +440,13 @@ void SchedulingURLLCMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 		//cout << "1: " << real(signal(0, 0)) << " 2: " << real(interferencePlusNoise(0, 0)) << " 3: " << FrequencySinr(RBindex) << endl;
 	}
 
-	UMS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1;
-	UMS[id]->scheduling->downlinkESINR = pow(2, sum(log2(1.0 + FrequencySinr)) / 50) - 1 + UMS[id]->scheduling->HARQeSINR;
+	UMS[id]->scheduling->downlinkESINR0 = pow(2, sum(log2(1.0 + FrequencySinr)) / size) - 1;
+	UMS[id]->scheduling->downlinkESINR = UMS[id]->scheduling->downlinkESINR0 + UMS[id]->scheduling->HARQeSINR;
 	UMS[id]->scheduling->downlinkESINRdB = 10.0 * log10(UMS[id]->scheduling->downlinkESINR);
+	//实时MCS
+	UMS[id]->scheduling->downlinkspectralEfficiency = GetSpectralEfficiency(UMS[id]->scheduling->downlinkESINRdB, UMS[id]->scheduling->MCS);
+	//记录信道更新时间
+	UMS[id]->channel->lasttime = Sim.TTI+1;
 }
 
 arma::cx_mat* SchedulingURLLCMS::PrecodingMatrix(enum Precoding_Matrix precodingtype, arma::cx_mat *codebook, int type)

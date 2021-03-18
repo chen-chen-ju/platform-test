@@ -59,20 +59,13 @@ void PerformanceURLLCMS::Initialize(int ms)
 
 void PerformanceURLLCMS::Measure(vector <int> RB_list,TB TransBlock)
 {
-
 	UMS[id]->scheduling->ReceivedSINR(TransBlock, MMSE);
 	int num_RB = TransBlock.numRB;
 	double TB_size = UMS[id]->scheduling->GetTBsize(UMS[id]->scheduling->downlinkspectralEfficiency, num_RB)*4/14;
 	double temp = UMS[id]->scheduling->downlinkESINR;
 	if (arma::randu() > FER(temp, UMS[id]->scheduling->MCS))
 	{
-		instantThroughput = TB_size * 1000;
-		if (TransBlock.rettime == 0)//除了初传，其他情况都保存在HARQ缓存里
-		{
-			UMS[id]->scheduling->msBuffer = UMS[id]->scheduling->msBuffer - TB_size;
-			if (UMS[id]->scheduling->msBuffer < 0)
-				UMS[id]->scheduling->msBuffer = 0;
-		}
+		instantThroughput = TB_size;
 		vector<Packet>temp = TransBlock.pack;
 		for (auto v : temp)
 		{
@@ -97,42 +90,66 @@ void PerformanceURLLCMS::Measure(vector <int> RB_list,TB TransBlock)
 						delay += 14 * Sim.TTI + Sim.OFDM - delay_list[index] + v.Getdelay();
 						delay_status[index] = 0;
 						//归还使用的分割序号
-						UMS[id]->scheduling->index.push_back(index);
+						UMS[id]->scheduling->divide_index.push_back(index);
+						//归还使用的序号
+						int ID = v.GetID();
+						UMS[id]->scheduling->index.push_back(ID);
 					}
 				}
 
 			}
+			else
+			{
+				//归还使用的序号
+				int ID = v.GetID();
+				UMS[id]->scheduling->index.push_back(ID);
+			}
 		}
-		TransBlock.eSINR = 0;
 
 	}
 	else
 	{
 		instantThroughput = 0;
 		UMS[id]->scheduling->HARQeSINR = UMS[id]->scheduling->HARQeSINR + temp;
-		error_packet++;
+		//error_packet++;
 		TransBlock.eSINR = TransBlock.eSINR + temp;
-		if (TransBlock.rettime == 0)
-		{
-			UMS[id]->scheduling->msBuffer -= TB_size;
-			if (UMS[id]->scheduling->msBuffer < 0)
-				UMS[id]->scheduling->msBuffer = 0;
-		}
 		TransBlock.rettime++;
 		if (TransBlock.rettime > 3)//超过最大重传限制
 		{
-			//MS[id]->scheduling->HARQeSINR = 0;
-			//MS[id]->scheduling->Maxrettime = 0;
-			for (int i = 0; i < TransBlock.pack.size(); i++)
-				TransBlock.pack[i].Adddelay(8);//增加8个OFDM的传输时延
+			UMS[id]->performance->error_packet++;
+			for (auto& v : TransBlock.pack)
+			{
+				//时延更新
+
+				int index = v.Getindex(), ID = v.GetID();
+				UMS[id]->scheduling->index.push_back(ID);
+				if (v.Getdivide())
+				{
+					if (delay_status[index] < 0 || delay_status[index] >1)
+						cout << "出错：分割包状态错误" << endl;
+					else if (delay_status[index] == 0)
+					{
+						delay_status[index] = 1;
+						//时延无穷大
+					}
+					else
+					{
+						delay_status[index] = 0;
+						UMS[id]->scheduling->divide_index.push_back(index);
+					}
+				}
+			}
 		}
 		else
 		{
+			for (int i = 0; i < TransBlock.pack.size(); i++)
+				TransBlock.pack[i].Adddelay(8);//增加8个OFDM的传输时延
 			UMS[id]->scheduling->HARQbuffer.push_back({ TransBlock,8 });
 		}
 	}
 
-	downlinkThroghput = downlinkThroghput * (Sim.TTI) / (Sim.TTI + 1) + instantThroughput / (Sim.TTI + 1);
+	//downlinkThroghput = downlinkThroghput * (Sim.TTI) / (Sim.TTI + 1) + instantThroughput / (Sim.TTI + 1);
+	downlinkThroghput = instantThroughput;
 }
 
 double PerformanceURLLCMS::FER(double SINR, int MCS)

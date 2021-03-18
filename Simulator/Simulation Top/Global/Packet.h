@@ -8,20 +8,20 @@ typedef unsigned int uint;
 class Packet
 {
 public:
-	Packet(uint ID = 0,
+	Packet(int ID = -1,
 		uint Head = 8,//RLC层head为8，MAC层head为23
 		bool if_divide = false,
-		int index = 0,
+		int index = -1,
 		uint packet_size = 256,//单位bit
 		double delay = 0 //单位ms
 	);
 	~Packet();
 
-	uint GetID()
+	int GetID()
 	{
 		return m_ID;
 	}
-	void SetID(uint ID)
+	void SetID(int ID)
 	{
 		m_ID = ID;
 	}
@@ -82,7 +82,7 @@ public:
 	}
 
 private:
-	uint m_ID;
+	int m_ID;
 	uint m_Head;//头长度
 	int m_if_divide;
 	int m_index;

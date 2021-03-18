@@ -174,8 +174,6 @@ void SchedulingBS::GetUElist(int bsID, int& num_MS, vector<int>& UE_list)
 void SchedulingBS::MixSchedule(int bsID)
 {
 
-	int Umsid = 0;
-	int RB_inCB = 0;
 	//int Packet_size = 256+8;//正常一个pdu大小,定义放到Packet.h的宏定义中
 	//int CB_size = 1; 
 	//一个TTI一个CB
@@ -183,25 +181,13 @@ void SchedulingBS::MixSchedule(int bsID)
 	{
 
 		int umsID = BS[bsID]->network->attachedUMS[Umsid];
+		if (umsID == 92)
+			int t = 1;
 
-		//此部分功能转移到performance里完成，完成了统计后，再释放资源。
-		/*
-		bool fa = UMS[umsID]->scheduling->Updatetimer();
-		//UMS调度持续时间完成
-		if (fa)
-		{
-			vector<int> reuse = allocationMapUMS.find(umsID)->second;//UMS的资源重新可用,放入空闲资源中
-			//vec3.insert(vec3.end(),vec1.begin(),vec1.end()); 合并vector
-			RB_free.insert(RB_free.begin(), reuse.begin(), reuse.end());//修改了，使得RB_free里可用资源按升序排列
-			for (vector<int>::iterator iter = reuse.begin(); iter != reuse.end(); iter++)
-			{
-				RB_belong[*iter] = -1; //资源重新标识为可用
-			}
-			allocationMapUMS.erase(umsID);
-		}
-		*/
+		//没有可用资源
+		if (RB_free.size() + RB_belongMS.size() == 0)
+			return;
 
-		//这里还要改，要考虑抢占MS的资源(改完了)
 		if (UMS[umsID]->scheduling->Needret)//需要进行重传，优先该用户的重传
 		{
 			/*
@@ -219,36 +205,41 @@ void SchedulingBS::MixSchedule(int bsID)
 			//num_RB = min((int)RB_free.size(), num_RB);
 			if (RB_free.size() >= num_RB)
 			{
+				temp.numRB = num_RB;
 				for (int i = 0; i < num_RB; i++)
 				{
-					newRB.push_back(RB_free[0]);
-					RB_belong(RB_free[0]) = -2;
-					RB_free.erase(RB_free.begin());
+					Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;
+					newRB.push_back(RB_free.front());
+					RB_belong(RB_free.front()) = -2;
+					RB_free.pop_front();
 				}
-				//newMap.second.insert(newMap.second.end(),RB_free.begin(), RB_free.begin()+ num_RB);
-				//RB_free.erase(RB_free.begin(), RB_free.begin() + num_RB);
 			}
 			else
 			{
-				//newMap.second.insert(newMap.second.end(), RB_free.begin(), RB_free.end());
-				//RB_free.erase(RB_free.begin(), RB_free.end());
 				for (int i = 0; i < RB_free.size(); i++)
 				{
-					newRB.push_back(RB_free[0]);
-					RB_belong(RB_free[0]) = -2;
-					RB_free.erase(RB_free.begin());
+					Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;//4个TTI后要刷新
+					newRB.push_back(RB_free.front());
+					RB_belong(RB_free.front()) = -2;
+					RB_free.pop_front();
 				}
 				int res_need = num_RB - RB_free.size();
 				num_RB= RB_free.size();
+				//使用MS占用的资源
 				while (RB_belongMS.size() > 0 && res_need>0)
 				{
-					newRB.push_back(RB_belongMS[0]);
-					int msID = RB_belong(RB_belongMS[0]);
-					RB_belong(RB_belongMS[0]) = -2;
+					//抢占MS的资源 resource_used已经是1;
+					newRB.push_back(RB_belongMS.front());
+					int msID = RB_belong(RB_belongMS.front());
+					RB_belong(RB_belongMS.front()) = -2;
+					MS[msID]->scheduling->Pi = 1; //更新抢占指示（这里会更新多次，因为MS占用多个RB。但只更新一次其实就够了，没有进行优化）
+					RB_belongMS.pop_front();
 					res_need--;
 					num_RB++;
 				}
+				temp.numRB = num_RB;
 			}
+
 			map <int, vector <int> >::iterator itMapUMS;
 			itMapUMS = allocationMapUMS.find(umsID);
 			if (itMapUMS != allocationMapUMS.end())
@@ -258,15 +249,21 @@ void SchedulingBS::MixSchedule(int bsID)
 			else
 			{
 				pair <int, vector <int> > newMap = make_pair(umsID, newRB);
-				allocationMapMS.insert(newMap);
+				allocationMapUMS.insert(newMap);
 			}
 			//插入到UMS的业务定时缓存中
-
+			//TB_entityUMS不能每个TTI刷新
 			TB_entityUMS.push_back(temp);
 			UMS[umsID]->scheduling->HARQbuffer.erase(UMS[umsID]->scheduling->HARQbuffer.begin());
 
-			if (RB_free.size() == 0 && RB_belongMS.size()==0)
+			if (RB_free.size() + RB_belongMS.size()==0)
 			{
+				int size = Sim.scheduling->numRB;
+				double ra = (double)(1.0 / size);
+				for (int i = 0; i < size; i++)
+				{
+					ratio[i] = ra;
+				}
 				cout << "BS" << id << "无可用RB了" << endl;
 				return;
 			}
@@ -276,7 +273,9 @@ void SchedulingBS::MixSchedule(int bsID)
 		{
 			if (UMS[umsID]->scheduling->msBuffer > 0)
 			{
-				int num_RB = UMS[umsID]->scheduling->GetTBsize(UMS[umsID]->scheduling->downlinkspectralEfficiency, UMS[umsID]->scheduling->msBuffer * 14 / 4);
+				//TB承载的数据量要有上限
+				double datasize = min(UMS[umsID]->scheduling->msBuffer * 14 / 4, 2800.0);
+				int num_RB = UMS[umsID]->scheduling->GetTBsize(UMS[umsID]->scheduling->downlinkspectralEfficiency, datasize);
 				map <int, vector <int> >::iterator itMapUMS;
 
 				//怎么分配RB，要考虑到初始分配完有可能有剩余资源，而且不能抢占UMS的资源。
@@ -286,26 +285,29 @@ void SchedulingBS::MixSchedule(int bsID)
 				//vector <Packet> list;
 				TB newTB;
 				newTB.TB_ID = umsID;
-				newTB.TBmcs = MS[umsID]->scheduling->MCS;
+				newTB.TBmcs = UMS[umsID]->scheduling->MCS;
 				newTB.rettime = 0;
 				newTB.eSINR = 0;
 				newTB.URTimer = 4;
 
 				for (int i = 0; i < num_RB; i++)
 				{
-					if (RB_free.size() > 0) //先使用空闲的RB资源
+					//先使用空闲的RB资源
+					if (RB_free.size() > 0) 
 					{
-						newRB.push_back(RB_free[0]);
-						RB_belong(RB_free[0]) = -2;
-						RB_free.erase(RB_free.begin());
+						Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;
+						newRB.push_back(RB_free.front());
+						RB_belong(RB_free.front()) = -2;
+						RB_free.pop_front();
 					}
 					else
 					{
+						//抢占MS资源
 						if (RB_belongMS.size() > 0)
 						{
-							newRB.push_back(RB_belongMS[0]);
-							int msID = RB_belong(RB_belongMS[0]);
-							RB_belong(RB_belongMS[0]) = -2;
+							newRB.push_back(RB_belongMS.front());
+							int msID = RB_belong(RB_belongMS.front());
+							RB_belong(RB_belongMS.front()) = -2;
 							MS[msID]->scheduling->Pi = 1; //更新抢占指示（这里会更新多次，因为MS占用多个RB。但只更新一次其实就够了，没有进行优化）
 							RB_belongMS.erase(RB_belongMS.begin());
 						}
@@ -315,13 +317,18 @@ void SchedulingBS::MixSchedule(int bsID)
 							{
 								//根据TB大小，切割整合packet
 								int RBsize = newRB.size();
-								uint TBsize = (uint)UMS[umsID]->scheduling->GetTBsize(UMS[umsID]->scheduling->downlinkspectralEfficiency, RBsize) * 4 / 14;
+								uint TBsize = static_cast<uint>(UMS[umsID]->scheduling->GetTBsize(UMS[umsID]->scheduling->downlinkspectralEfficiency, RBsize) * 4 / 14);
 								newTB.numRB = RBsize;
 								newTB.TBsize = TBsize;
-
+								UMS[umsID]->scheduling->msBuffer -= TBsize;
 								while (TBsize > 0)
 								{
 									Packet temp = UMS[umsID]->scheduling->PacketBuffer.front();
+									if (temp.GetID() == -1)
+									{
+										temp.SetID(UMS[umsID]->scheduling->index.front());
+										UMS[umsID]->scheduling->index.pop_front();
+									}
 									if (TBsize >= temp.Gettotalsize())
 									{
 										TBsize -= temp.Gettotalsize();
@@ -330,24 +337,37 @@ void SchedulingBS::MixSchedule(int bsID)
 									}
 									else
 									{
+
 										uint resbit = temp.Gettotalsize() - TBsize;
 										temp.SetSize(TBsize - temp.GetHead());
 										temp.Setdivide(true);
-										temp.Setindex(UMS[umsID]->scheduling->divide_index[0]);
-										newTB.pack.push_back(temp);
-
-										temp.SetSize(resbit);
-										//切割剩余部分留在缓存中
 										UMS[umsID]->scheduling->PacketBuffer.pop_front();
-										UMS[umsID]->scheduling->PacketBuffer.push_front(temp);
-										//去除使用的切割标记
-										UMS[umsID]->scheduling->divide_index.erase(UMS[umsID]->scheduling->divide_index.begin());
+										
+										if (temp.Getindex() == -1)
+										{
+											temp.Setindex(UMS[umsID]->scheduling->divide_index.front());
+											newTB.pack.push_back(temp);
+
+											//去除使用的切割标记
+											UMS[umsID]->scheduling->divide_index.pop_front();
+											
+											//切割剩余部分留在缓存中
+											temp.SetSize(resbit);
+											UMS[umsID]->scheduling->PacketBuffer.push_front(temp);
+											UMS[umsID]->scheduling->msBuffer += temp.GetHead();
+										}
+										else //剩下数据不要了
+										{
+											UMS[umsID]->scheduling->msBuffer -= resbit;
+											newTB.pack.push_back(temp);
+										}
+										
 										break;
 									}
 								}
 								TB_entityUMS.push_back(newTB);
 
-								UMS[umsID]->performance->packet++;
+								//UMS[umsID]->performance->packet++;
 								itMapUMS = allocationMapUMS.find(umsID);
 								if (itMapUMS == allocationMapUMS.end())//该用户只有一个URLLC业务
 								{
@@ -361,24 +381,77 @@ void SchedulingBS::MixSchedule(int bsID)
 								}
 								
 							}
-
+							//所有资源都被使用，功率平均分配
+							int size = Sim.scheduling->numRB;
+							double ra = (double)(1.0 / size);
+							for (int i = 0; i < size; i++)
+							{
+								ratio[i] = ra;
+							}
 							cout << "BS" << id << "无可用RB了" << endl;
 							return;
 						}
 					}
 				}
 				//资源充足，所有packet都放入TB
-				while (!UMS[umsID]->scheduling->PacketBuffer.empty())
+				newTB.TBsize = static_cast<uint>(UMS[umsID]->scheduling->msBuffer);
+				UMS[umsID]->scheduling->msBuffer -= datasize*4/14;
+				if (UMS[umsID]->scheduling->msBuffer == 0)
 				{
-					newTB.pack.push_back(UMS[umsID]->scheduling->PacketBuffer.front());
-					MS[umsID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+					while (!UMS[umsID]->scheduling->PacketBuffer.empty())
+					{
+						Packet temp = UMS[umsID]->scheduling->PacketBuffer.front();
+						if (temp.GetID() == -1)
+						{
+							temp.SetID(UMS[umsID]->scheduling->index.front());
+							UMS[umsID]->scheduling->index.pop_front();
+						}
+						newTB.pack.push_back(temp);
+						UMS[umsID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+					}
 				}
-				newTB.TBsize = (uint)UMS[umsID]->scheduling->msBuffer;
+				else
+				{
+					uint TBsize = static_cast<uint>(datasize/14*4);
+					while (TBsize > 0)
+					{
+						Packet temp = UMS[umsID]->scheduling->PacketBuffer.front();
+						if (temp.GetID() == -1)
+						{
+							temp.SetID(UMS[umsID]->scheduling->index.front());
+							UMS[umsID]->scheduling->index.pop_front();
+						}
+						if (TBsize >= temp.Gettotalsize())
+						{
+							TBsize -= temp.Gettotalsize();
+							newTB.pack.push_back(temp);
+							UMS[umsID]->scheduling->PacketBuffer.pop_front();
+						}
+						else
+						{
+							uint resbit = temp.Gettotalsize() - TBsize;
+							temp.SetSize(TBsize - temp.GetHead());
+							temp.Setdivide(true);
+							temp.Setindex(UMS[umsID]->scheduling->divide_index.front());
+							newTB.pack.push_back(temp);
+
+							temp.SetSize(resbit);
+							//切割剩余部分留在缓存中
+							UMS[umsID]->scheduling->PacketBuffer.pop_front();
+							UMS[umsID]->scheduling->PacketBuffer.push_front(temp);
+							//去除使用的切割标记
+							UMS[umsID]->scheduling->divide_index.pop_front();
+							UMS[umsID]->scheduling->msBuffer += temp.GetHead();
+							break;
+						}
+					}
+				}
 				newTB.numRB = num_RB;
 				TB_entityUMS.push_back(newTB);
 
 
-				UMS[umsID]->performance->packet++;
+				//UMS[umsID]->performance->packet++;
+				itMapUMS = allocationMapUMS.find(umsID);
 				if (itMapUMS == allocationMapUMS.end())//该用户只有一个URLLC业务
 				{
 					pair <int, vector <int> > newMap = make_pair(umsID, newRB);
@@ -389,110 +462,6 @@ void SchedulingBS::MixSchedule(int bsID)
 					//将新业务使用的资源插入在最后
 					itMapUMS->second.insert(itMapUMS->second.end(), newRB.begin(), newRB.end());
 				}
-
-				//此部分合并到上面了，简化程序
-				//目前没有使用，即每个UMS要在上一个任务完成后才能进行下一次的调度。(开始使用)
-				/*
-				else
-				{
-					//新增TB
-					//vector <Packet> list;
-					TB newTB;
-					newTB.TB_ID = umsID;
-					newTB.TBmcs = UMS[umsID]->scheduling->MCS;
-					newTB.rettime = 0;
-					newTB.eSINR = 0;
-
-					vector <int> newRB;
-
-					int t = 0, RBsize = 0;
-					for (int i = 1; i < num_RB; i++)
-					{
-						if (RB_free.size() > 0) //先使用空闲的RB资源
-						{
-							t = 1;
-							itMapUMS->second.push_back(RB_free[0]);
-							newRB.push_back(RB_free[0]);
-							RB_belong(RB_free[0]) = -2;
-							RB_free.erase(RB_free.begin());
-							RBsize++;
-						}
-						else
-						{
-							if (RB_belongMS.size() > 0)
-							{
-								t = 1;
-								UMS[umsID]->performance->packet++;
-								itMapUMS->second.push_back(RB_belongMS[0]);
-								newRB.push_back(RB_free[0]);
-								int msID = RB_belong(RB_belongMS[0]);
-								RB_belong(RB_belongMS[0]) = -2;
-								MS[msID]->scheduling->Pi = 1; //更新抢占指示（这里会更新多次，因为MS占用多个RB。但只更新一次其实就够了，没有进行优化）
-								RB_belongMS.erase(RB_belongMS.begin());
-								RBsize++;
-							}
-							else
-							{
-								if (t == 1)
-								{
-									uint TBsize = (uint)UMS[umsID]->scheduling->GetTBsize(UMS[umsID]->scheduling->downlinkspectralEfficiency, RBsize) * 4 / 14;
-									newTB.numRB = RBsize;
-									newTB.TBsize = TBsize;
-
-									while (TBsize > 0)
-									{
-										Packet temp = UMS[umsID]->scheduling->PacketBuffer.front();
-										if (TBsize >= temp.Gettotalsize())
-										{
-											TBsize -= temp.Gettotalsize();
-											newTB.pack.push_back(temp);
-											UMS[umsID]->scheduling->PacketBuffer.pop_front();
-										}
-										else
-										{
-											uint resbit = temp.Gettotalsize() - TBsize;
-											temp.SetSize(TBsize - temp.GetHead());
-											temp.Setdivide(true);
-											temp.Setindex(UMS[umsID]->scheduling->divide_index[0]);
-											newTB.pack.push_back(temp);
-
-											temp.SetSize(resbit);
-											//切割剩余部分留在缓存中
-											UMS[umsID]->scheduling->PacketBuffer.pop_front();
-											UMS[umsID]->scheduling->PacketBuffer.push_front(temp);
-											//去除使用的切割标记
-											UMS[umsID]->scheduling->divide_index.erase(UMS[umsID]->scheduling->divide_index.begin());
-											break;
-										}
-									}
-									TB_entityUMS.push_back(newTB);
-									UMS[umsID]->performance->packet++;
-
-									URLLC_Timer t0;
-									t0.num = RBsize;
-									t0.RB = ;
-									t0.Timer = 4;
-									UMS[umsID]->scheduling->URTimer.push_back(t0);
-								}
-								cout << "BS" << id << "无可用RB了" << endl;
-								return;
-							}
-						}
-
-					}
-
-					while (!UMS[umsID]->scheduling->PacketBuffer.empty())
-					{
-						newTB.pack.push_back(UMS[umsID]->scheduling->PacketBuffer.front());
-						MS[umsID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
-					}
-					newTB.TBsize = (uint)UMS[umsID]->scheduling->msBuffer;
-					newTB.numRB = num_RB;
-					TB_entityUMS.push_back(newTB);
-
-					UMS[umsID]->performance->packet++;
-				}
-				*/
 			}
 		}
 	}
@@ -500,6 +469,8 @@ void SchedulingBS::MixSchedule(int bsID)
 	//给MS分配资源
 	if (Sim.OFDM==0) 
 	{
+		if (bsID == 50)
+			int t = 1;
 		//ratio;
 		if (RB_free.size() > 0)
 		{
@@ -532,22 +503,23 @@ void SchedulingBS::MixSchedule(int bsID)
 					//RB个数变化对频谱效率的影响？
 					for (int i = 0; i < num_RB; i++)
 					{
-						Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;
-						newMap.second.push_back(RB_free[0]);
-						RB_belongMS.push_back(RB_free[0]);
-						RB_belong[RB_free[0]] = msID;
-						RB_free.erase(RB_free.begin());
+						Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;
+						newMap.second.push_back(RB_free.front());
+						RB_belongMS.push_back(RB_free.front());
+						RB_belong[RB_free.front()] = msID;
+						RB_free.pop_front();
 					}
 					MS[msID]->scheduling->HARQbuffer.erase(MS[msID]->scheduling->HARQbuffer.begin());
 					allocationMapMS.insert(newMap);//之前忘记更新Map和TB
 					TB_entity.push_back(temp);
 					if (RB_free.size() == 0)
 					{
-						int size = RB_belongMS.size();
+						//所有资源都被使用，功率平均分配
+						int size = Sim.scheduling->numRB;
+						double ra = (double)(1.0 / size);
 						for (int i = 0; i < size; i++)
 						{
-							int re_id = RB_belongMS[i];
-							ratio[re_id] = (double)(1.0 / size);
+							ratio[i] = ra;
 						}
 						cout << "BS" << id << "无可用RB了" << endl;
 						delete[] index;
@@ -558,7 +530,8 @@ void SchedulingBS::MixSchedule(int bsID)
 				{
 					if (MS[msID]->scheduling->msBuffer > 0) //有数据要传     && MS[msID]->scheduling->MCS != -1
 					{
-						int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->scheduling->msBuffer);
+						double datasize = min(MS[msID]->scheduling->msBuffer, 4000.0);
+						int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, datasize);
 
 						vector<int> newRB;
 						pair <int, vector <int> > newMap = make_pair(msID, newRB);
@@ -575,18 +548,18 @@ void SchedulingBS::MixSchedule(int bsID)
 						{
 							if (RB_free.size() > 0) //只能使用空闲的RB资源
 							{
-								Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;//标记使用了该资源，在TTI结束时清除标记
+								Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;//标记使用了该资源，在TTI结束时清除标记
 
-								newMap.second.push_back(RB_free[0]);
-								RB_belongMS.push_back(RB_free[0]);
-								RB_belong[RB_free[0]] = msID;
-								RB_free.erase(RB_free.begin());
+								newMap.second.push_back(RB_free.front());
+								RB_belongMS.push_back(RB_free.front());
+								RB_belong[RB_free.front()] = msID;
+								RB_free.pop_front();
 							}
 							else
 							{
 								if (newMap.second.size() > 0)
 								{
-									MS[msID]->performance->packet++;
+									//MS[msID]->performance->packet++;
 									allocationMapMS.insert(newMap);
 
 									//根据TB大小，切割整合packet
@@ -594,10 +567,15 @@ void SchedulingBS::MixSchedule(int bsID)
 									uint TBsize = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, RBsize);
 									newTB.numRB = RBsize;
 									newTB.TBsize = TBsize;
-
+									MS[msID]->scheduling->msBuffer -= TBsize;
 									while (TBsize > 0)
 									{
 										Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+										if (temp.GetID() == -1)
+										{
+											temp.SetID(MS[msID]->scheduling->index.front());
+											MS[msID]->scheduling->index.pop_front();
+										}
 										if (TBsize >= temp.Gettotalsize())
 										{
 											TBsize -= temp.Gettotalsize();
@@ -609,7 +587,7 @@ void SchedulingBS::MixSchedule(int bsID)
 											uint resbit = temp.Gettotalsize() - TBsize;
 											temp.SetSize(TBsize - temp.GetHead());
 											temp.Setdivide(true);
-											temp.Setindex(MS[msID]->scheduling->divide_index[0]);
+											temp.Setindex(MS[msID]->scheduling->divide_index.front());
 											newTB.pack.push_back(temp);
 
 											temp.SetSize(resbit);
@@ -617,19 +595,20 @@ void SchedulingBS::MixSchedule(int bsID)
 											MS[msID]->scheduling->PacketBuffer.pop_front();
 											MS[msID]->scheduling->PacketBuffer.push_front(temp);
 											//去除使用的切割标记
-											MS[msID]->scheduling->divide_index.erase(MS[msID]->scheduling->divide_index.begin());
+											MS[msID]->scheduling->divide_index.pop_front();
+											MS[msID]->scheduling->msBuffer += temp.GetHead();//Buffer包含了头部信息
 											break;
 										}
 									}
 									TB_entity.push_back(newTB);
 								}
 
-								//平均分配功率
-								int size = RB_belongMS.size();
+								//所有资源都被使用，功率平均分配
+								int size = Sim.scheduling->numRB;
+								double ra = (double)(1.0 / size);
 								for (int i = 0; i < size; i++)
 								{
-									int re_id = RB_belongMS[i];
-									ratio[re_id] = (double)(1.0 / size);
+									ratio[i] = ra;
 								}
 								cout << "BS" << id << "无可用RB了" << endl;
 								delete[] index;
@@ -638,316 +617,375 @@ void SchedulingBS::MixSchedule(int bsID)
 						}
 
 						//资源充足，所有packet都放入TB
-						while (!MS[msID]->scheduling->PacketBuffer.empty())
+						newTB.TBsize = (uint)datasize;
+						MS[msID]->scheduling->msBuffer -= datasize;
+						//不是达到上限
+						if (MS[msID]->scheduling->msBuffer == 0)
 						{
-							newTB.pack.push_back(MS[msID]->scheduling->PacketBuffer.front());
-							MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+							while (!MS[msID]->scheduling->PacketBuffer.empty())
+							{
+								Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+								if (temp.GetID() == -1)
+								{
+									temp.SetID(MS[msID]->scheduling->index.front());
+									MS[msID]->scheduling->index.pop_front();
+								}
+								newTB.pack.push_back(temp);
+								MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+							}
 						}
-						newTB.TBsize = (uint)MS[msID]->scheduling->msBuffer;
+						//上限4000
+						else
+						{
+							uint TBsize = (uint)datasize;
+							while (TBsize > 0)
+							{
+								Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+								if (temp.GetID() == -1)
+								{
+									temp.SetID(MS[msID]->scheduling->index.front());
+									MS[msID]->scheduling->index.pop_front();
+								}
+								if (TBsize >= temp.Gettotalsize())
+								{
+									TBsize -= temp.Gettotalsize();
+									newTB.pack.push_back(temp);
+									MS[msID]->scheduling->PacketBuffer.pop_front();
+								}
+								else
+								{
+									uint resbit = temp.Gettotalsize() - TBsize;
+									temp.SetSize(TBsize - temp.GetHead());
+									temp.Setdivide(true);
+									temp.Setindex(MS[msID]->scheduling->divide_index.front());
+									newTB.pack.push_back(temp);
+
+									temp.SetSize(resbit);
+									//切割剩余部分留在缓存中
+									MS[msID]->scheduling->PacketBuffer.pop_front();
+									MS[msID]->scheduling->PacketBuffer.push_front(temp);
+									//去除使用的切割标记
+									MS[msID]->scheduling->divide_index.pop_front();
+									MS[msID]->scheduling->msBuffer += temp.GetHead();
+									break;
+								}
+							}
+						}
 						newTB.numRB = num_RB;
 						TB_entity.push_back(newTB);
 
-						MS[msID]->performance->packet++;//统计TB个数
+						//MS[msID]->performance->packet++;//统计TB个数
 						allocationMapMS.insert(newMap);
 					}
 				}
 
-				//资源充足时的功率分配系数
-				//平均分配功率
-				int size = RB_belongMS.size();
-				for (int i = 0; i < size; i++)
-				{
-					int re_id = RB_belongMS[i];
-					ratio[re_id] = (double)(1.0 / size);
-				}
+				
 			}
 			
 			delete[] index; //析构动态数组
 		}
 	}
-	
+	//资源充足时的功率分配系数
+	//平均分配功率
+	if (RB_free.size() < 50)
+	{
+		int size = Sim.scheduling->numRB - RB_free.size();
+		double ra = (double)(1.0 / size);
+		for (int i = 0; i < Sim.scheduling->numRB; i++)
+		{
+			if (RB_belong(i) != -1)//是否被使用
+				ratio[i] = ra;
+		}
+	}
 	
 }
 
 void SchedulingBS::SCMASchedule(int bsID)
 {
-	int num_MS = 0;
-	vector<int> UE_list;//需要提供服务的用户，buffer>0或者要重传
-	GetUElist(bsID, num_MS, UE_list);
-	if (num_MS == 0)
-		return;
-	int num_RB = Sim.scheduling->numRB;
-	int num_CB = Sim.scheduling->numCB;
-	if (Sim.scheduling->SCMAmodel == 0)
+	if (Sim.OFDM == 0)
 	{
-		double ra = 1.0 / num_RB / 3.0;
-		for (int i = 0; i < ratio.size(); i++)
+		int num_MS = 0;
+		vector<int> UE_list;//需要提供服务的用户，buffer>0或者要重传
+		GetUElist(bsID, num_MS, UE_list);
+		if (num_MS == 0)
+			return;
+		int num_RB = Sim.scheduling->numRB;
+		int num_CB = Sim.scheduling->numCB;
+		if (Sim.scheduling->SCMAmodel == 0)
 		{
-			ratio[i] = ra;
-		}
-	}
-	arma::imat Qscore(num_CB, num_MS), Gscore(num_CB, num_MS), Hscore(num_CB, num_MS);
-	arma::mat rate(num_CB, num_MS);//速率矩阵
-	vector<vector<int>>allocation(num_MS, vector<int>());//分配矩阵
-	//int* index = new int[num_MS];
-	vector<int> index(num_MS, 0);
-	vector<double> ratelist(num_MS, 0);//记录每个用户的分配速率     
-	double rate_th = 256000;	//	GBR阈值256000
-	int maxvalue = num_MS * num_MS;//达不到速率要求时的惩罚
-
-	vector<int> unCB, unUE;
-	int T = 4, num_perGroup = num_CB / T;//分组数目和每组的CB个数
-	vector<vector<int>>CB_perGroup(T,vector<int>());
-	vector<double>total_rate(T, 0);//每组的总速率和
-	//-------------初始化
-	for (int i = 0; i < num_CB; i++)
-	{
-		//unCB.emplace_back(i);
-		int ind = i / num_perGroup;
-		CB_perGroup[ind].emplace_back(i);
-		if (i > 0)
-		{
-			index = unUE;//index恢复
-		}
-
-		vector<double> PFmetric(num_MS, 0);
-		for (int j = 0; j < num_MS; j++)
-		{
-			if (i == 0)
+			double ra = 1.0 / num_RB / 3.0;
+			for (int i = 0; i < ratio.size(); i++)
 			{
-				unUE.emplace_back(j);
-				index[j] = j;
+				ratio[i] = ra;
 			}
-			int msID = UE_list[j];
-			double sinr = min(MS[msID]->scheduling->ESINR[CBlist[i][0]], MS[id]->scheduling->ESINR[CBlist[i][1]]);
-			rate(i, j) = 15000 * log2(1 + sinr);
-			total_rate[i / num_perGroup] += rate(i, j);
-			if (rate(i, j) >= rate_th)
-				Gscore(i, j) = 1;
-			else
-				Gscore(i, j) = maxvalue;
-			if (MS[msID]->scheduling->downlinkaveragedThroghput > 0)
-				PFmetric[j] = rate(i, j) / MS[msID]->scheduling->downlinkaveragedThroghput;
-			else
-				PFmetric[j] = rate(i, j);
 		}
-		quickly_sort(PFmetric, 0, num_MS - 1, index);//PF排序
-		for (int j = 0; j < num_MS; j++)
+		arma::imat Qscore(num_CB, num_MS), Gscore(num_CB, num_MS), Hscore(num_CB, num_MS);
+		arma::mat rate(num_CB, num_MS);//速率矩阵
+		vector<vector<int>>allocation(num_MS, vector<int>());//分配矩阵
+		//int* index = new int[num_MS];
+		vector<int> index(num_MS, 0);
+		vector<double> ratelist(num_MS, 0);//记录每个用户的分配速率     
+		double rate_th = 256000;	//	GBR阈值256000
+		int maxvalue = num_MS * num_MS;//达不到速率要求时的惩罚
+
+		vector<int> unCB, unUE;
+		int T = 4, num_perGroup = num_CB / T;//分组数目和每组的CB个数
+		vector<vector<int>>CB_perGroup(T, vector<int>());
+		vector<double>total_rate(T, 0);//每组的总速率和
+		//-------------初始化
+		for (int i = 0; i < num_CB; i++)
 		{
-			Qscore(i, j) = index[j];//PF权值计算
-			Hscore(i, j) = Qscore(i, j) + Gscore(i, j);//总权值计算
-		}
-	}
-	//------初始化结束
-
-	index.resize(T);
-	for (int i = 0; i < T; i++)
-		index[i] = i;
-	quickly_sort(total_rate, 0, T - 1, index);
-
-	//根据排序结果，调整CB使用顺序，整合CB_perGroup
-	for (int i = 0; i < T; i++)
-	{
-		unCB.insert(unCB.end(), CB_perGroup[index[i]].begin(), CB_perGroup[index[i]].end());
-	}
-
-	//分配过程
-	while (unCB.size()!=0 && unUE.size()!=0)
-	{
-		int n = unCB.size(), m = unUE.size();
-		if (n > m)
-		{
-			//每次使用UE个数的CB进行分配
-			vector<int> useCB(unCB.begin(), unCB.begin()+ m);
-			//根据使用的CB来获取Hscore
-			arma::imat useHscore(m,m);
-			for (int i = 0; i < m; i++)
+			//unCB.emplace_back(i);
+			int ind = i / num_perGroup;
+			CB_perGroup[ind].emplace_back(i);
+			if (i > 0)
 			{
-				for (int j = 0; j < m; j++)
-					useHscore(i, j) = Hscore(unCB[i], unUE[j]);
-			}
-			vector<int> assign(m);//行是CB，列是用户。assign[i]记录的是第i个CB分配给哪个用户
-			Hungarian(assign, useHscore);
-			//更新分配结果
-			//vector<int>::iterator it = unUE.begin();
-			for (int i = 0; i < m; i++)
-			{
-				int UE_ind = unUE[assign[i]];
-				allocation[UE_ind].emplace_back(unCB[i]);
-				ratelist[UE_ind] += rate(unCB[i], UE_ind);
+				index = unUE;//index恢复
 			}
 
-			vector<int>::iterator it = unUE.begin();
-			while (it != unUE.end())
+			vector<double> PFmetric(num_MS, 0);
+			for (int j = 0; j < num_MS; j++)
 			{
-				//用户需求被满足,删除此用户
-				if (ratelist[*it] >= rate_th)
+				if (i == 0)
 				{
-					it = unUE.erase(it);
+					unUE.emplace_back(j);
+					index[j] = j;
 				}
+				int msID = UE_list[j];
+				double sinr = min(MS[msID]->scheduling->ESINR[CBlist[i][0]], MS[id]->scheduling->ESINR[CBlist[i][1]]);
+				rate(i, j) = 15000 * log2(1 + sinr);
+				total_rate[i / num_perGroup] += rate(i, j);
+				if (rate(i, j) >= rate_th)
+					Gscore(i, j) = 1;
 				else
+					Gscore(i, j) = maxvalue;
+				if (MS[msID]->scheduling->downlinkaveragedThroghput > 0)
+					PFmetric[j] = rate(i, j) / MS[msID]->scheduling->downlinkaveragedThroghput;
+				else
+					PFmetric[j] = rate(i, j);
+			}
+			quickly_sort(PFmetric, 0, num_MS - 1, index);//PF排序
+			for (int j = 0; j < num_MS; j++)
+			{
+				Qscore(i, j) = index[j];//PF权值计算
+				Hscore(i, j) = Qscore(i, j) + Gscore(i, j);//总权值计算
+			}
+		}
+		//------初始化结束
+
+		index.resize(T);
+		for (int i = 0; i < T; i++)
+			index[i] = i;
+		quickly_sort(total_rate, 0, T - 1, index);
+
+		//根据排序结果，调整CB使用顺序，整合CB_perGroup
+		for (int i = 0; i < T; i++)
+		{
+			unCB.insert(unCB.end(), CB_perGroup[index[i]].begin(), CB_perGroup[index[i]].end());
+		}
+
+		//分配过程
+		while (unCB.size() != 0 && unUE.size() != 0)
+		{
+			int n = unCB.size(), m = unUE.size();
+			if (n > m)
+			{
+				//每次使用UE个数的CB进行分配
+				vector<int> useCB(unCB.begin(), unCB.begin() + m);
+				//根据使用的CB来获取Hscore
+				arma::imat useHscore(m, m);
+				for (int i = 0; i < m; i++)
 				{
-					//更新Gscore和Hscore
-					for (int j = m; j < unCB.size(); j++)
+					for (int j = 0; j < m; j++)
+						useHscore(i, j) = Hscore(unCB[i], unUE[j]);
+				}
+				vector<int> assign(m);//行是CB，列是用户。assign[i]记录的是第i个CB分配给哪个用户
+				Hungarian(assign, useHscore);
+				//更新分配结果
+				//vector<int>::iterator it = unUE.begin();
+				for (int i = 0; i < m; i++)
+				{
+					int UE_ind = unUE[assign[i]];
+					allocation[UE_ind].emplace_back(unCB[i]);
+					ratelist[UE_ind] += rate(unCB[i], UE_ind);
+				}
+
+				vector<int>::iterator it = unUE.begin();
+				while (it != unUE.end())
+				{
+					//用户需求被满足,删除此用户
+					if (ratelist[*it] >= rate_th)
 					{
-						if (ratelist[*it] + rate(unCB[j], *it) >= rate_th)
-						{
-							//Gscore(unCB[j], UE_ind) = 1;
-							Hscore(unCB[j], *it) = Qscore(unCB[j], *it) + 1;
-						}
+						it = unUE.erase(it);
 					}
-					it++;
+					else
+					{
+						//更新Gscore和Hscore
+						for (int j = m; j < unCB.size(); j++)
+						{
+							if (ratelist[*it] + rate(unCB[j], *it) >= rate_th)
+							{
+								//Gscore(unCB[j], UE_ind) = 1;
+								Hscore(unCB[j], *it) = Qscore(unCB[j], *it) + 1;
+							}
+						}
+						it++;
+					}
 				}
+				//删除使用的CB，前m个
+				unCB.erase(unCB.begin(), unCB.begin() + m);
+
 			}
-			//删除使用的CB，前m个
-			unCB.erase(unCB.begin(), unCB.begin() + m);
-
-		}
-		else
-		{
-			vector<int> assign(m);
-			arma::imat useHscore(n, m);
-			for (int i = 0; i < n; i++)
+			else
 			{
-				for (int j = 0; j < m; j++)
-					useHscore(i, j) = Hscore(unCB[i], unUE[j]);
-			}
-			Hungarian(assign, useHscore);
-			//更新分配结果,只有n个有效CB
-			for (int i = 0; i < n; i++)
-			{
-				int UE_ind = unUE[assign[i]];
-				allocation[UE_ind].emplace_back(unCB[i]);
-				ratelist[UE_ind] += rate(unCB[i], UE_ind);
-			}
-
-			break;
-		}	
-	}
-
-
-	//根据分配结果，设置TB
-	for (int i = 0; i < num_MS; i++)
-	{
-		int msID = UE_list[i];
-		//allocation和ratelist
-		vector<int> newRB;//需要用RB序列，但是使用码本包含相同RB该怎么办？去重，只包含一次
-		for (int j = 0; j < allocation[i].size(); j++)
-		{
-			int CB_ID = allocation[i][j];
-			for (int k = 0; k < CBlist[CB_ID].size(); k++)
-			{
-				if (RB_belong[CBlist[CB_ID][k]] != msID)
+				vector<int> assign(m);
+				arma::imat useHscore(n, m);
+				for (int i = 0; i < n; i++)
 				{
-					//RB_free.erase();  //因为是以RB顺序进行分配，没有进行RB_free的更新，只能用于单业务情况
-					newRB.emplace_back(CBlist[CB_ID][k]);
-					RB_belong[CBlist[CB_ID][k]] = msID;
+					for (int j = 0; j < m; j++)
+						useHscore(i, j) = Hscore(unCB[i], unUE[j]);
 				}
+				Hungarian(assign, useHscore);
+				//更新分配结果,只有n个有效CB
+				for (int i = 0; i < n; i++)
+				{
+					int UE_ind = unUE[assign[i]];
+					allocation[UE_ind].emplace_back(unCB[i]);
+					ratelist[UE_ind] += rate(unCB[i], UE_ind);
+				}
+				unCB.erase(unCB.begin(), unCB.end());
 			}
 		}
-		allocationMapMS.insert(make_pair(msID, newRB));
-		TB newTB;
-		newTB.eSINR = 0;
-		newTB.TB_ID = msID;
-		newTB.TBsize = ratelist[i];
-		newTB.numRB = newRB.size();
-		TB_entity.push_back(newTB);
+
+
+		Left_CB += unCB.size();
+		//根据分配结果，设置TB
+		for (int i = 0; i < num_MS; i++)
+		{
+			int msID = UE_list[i];
+			//allocation和ratelist
+			vector<int> newRB;//需要用RB序列，但是使用码本包含相同RB该怎么办？去重，只包含一次
+			for (int j = 0; j < allocation[i].size(); j++)
+			{
+				int CB_ID = allocation[i][j];
+				for (int k = 0; k < CBlist[CB_ID].size(); k++)
+				{
+					if (RB_belong[CBlist[CB_ID][k]] != msID)
+					{
+						//RB_free.erase();  //因为是以RB顺序进行分配，没有进行RB_free的更新，只能用于单业务情况
+						newRB.emplace_back(CBlist[CB_ID][k]);
+						RB_belong[CBlist[CB_ID][k]] = msID;
+					}
+				}
+			}
+			allocationMapMS.insert(make_pair(msID, newRB));
+			TB newTB;
+			newTB.eSINR = 0;
+			newTB.TB_ID = msID;
+			newTB.TBsize = ratelist[i];
+			newTB.numRB = newRB.size();
+			TB_entity.push_back(newTB);
+		}
 	}
 }
 
 void SchedulingBS::SCMAPF(int bsID)
 {
-	int num_MS = 0;
-	vector<int> UE_list;//需要提供服务的用户，buffer>0或者要重传
-	GetUElist(bsID, num_MS, UE_list);
-	if (num_MS == 0)
-		return;
-	int num_RB = Sim.scheduling->numRB;
-	int num_CB = Sim.scheduling->numCB;
-	arma::mat rate(num_CB, num_MS);//速率矩阵
-	vector<double> ratelist(num_MS, 0);//每个用户的GBR阈值
-	double rate_th = 256000;	//	GBR阈值256000
-	if (Sim.scheduling->SCMAmodel == 0)
+	if (Sim.OFDM == 0)
 	{
-		double ra = 1.0 / num_RB / 3.0;
-		for (int i = 0; i < ratio.size(); i++)
+		int num_MS = 0;
+		vector<int> UE_list;//需要提供服务的用户，buffer>0或者要重传
+		GetUElist(bsID, num_MS, UE_list);
+		if (num_MS == 0)
+			return;
+		int num_RB = Sim.scheduling->numRB;
+		int num_CB = Sim.scheduling->numCB;
+		arma::mat rate(num_CB, num_MS);//速率矩阵
+		vector<double> ratelist(num_MS, 0);//每个用户的GBR阈值
+		double rate_th = 256000;	//	GBR阈值256000
+		if (Sim.scheduling->SCMAmodel == 0)
 		{
-			ratio[i] = ra;
-		}
-	}
-    
-	vector<vector<int>>allocation(num_MS, vector<int>());//分配矩阵
-	vector<int> index;//只存储未满足服务的用户下标
-	int flag = num_MS;//记录剩余待服务用户数
-	
-	//RB资源分配过程
-	for (int i = 0; i < num_CB; i++)
-	{
-		vector<double> PFmetric;//只存储未满足服务的用户数据
-		int ind = -1, maxPF = 0;//每次PF最大的下标
-		for (int j = 0; j < flag; j++)
-		{
-			if (i == 0)
-				index.emplace_back(j);
-
-			int msID = UE_list[index[j]];
-			double sinr = min(MS[msID]->scheduling->ESINR[CBlist[i][0]], MS[id]->scheduling->ESINR[CBlist[i][1]]);
-			rate(i, index[j]) = 15000 * log2(1 + sinr);
-			if (MS[msID]->scheduling->downlinkaveragedThroghput > 0)
-				PFmetric.emplace_back(rate(i, index[j]) / MS[msID]->scheduling->downlinkaveragedThroghput);
-			else
-				PFmetric.emplace_back(rate(i, index[j]));
-			if (PFmetric[j] > maxPF)
+			double ra = 1.0 / num_RB / 3.0;
+			for (int i = 0; i < ratio.size(); i++)
 			{
-				maxPF = PFmetric[j];
-				ind = j;
+				ratio[i] = ra;
 			}
 		}
-		//PF排序，只需要找到最大的下标
-		allocation[index[ind]].push_back(i);
-		ratelist[index[ind]] += rate(i, index[ind]);
-		if (ratelist[index[ind]] >= rate_th)//从index中删除下标
+
+		vector<vector<int>>allocation(num_MS, vector<int>());//分配矩阵
+		vector<int> index;//只存储未满足服务的用户下标
+		int flag = num_MS, unused_CB = num_CB;//记录剩余待服务用户数，未使用的资源数
+
+		//RB资源分配过程
+		for (int i = 0; i < num_CB; i++)
 		{
-			if (--flag == 0)//所有用户满足了目标
-				break;
-			for (vector<int>::iterator iter = index.begin(); iter != index.end(); iter++)
+			--unused_CB;
+			vector<double> PFmetric;//只存储未满足服务的用户数据
+			int ind = -1, maxPF = 0;//每次PF最大的下标
+			for (int j = 0; j < flag; j++)
 			{
-				if (*iter == index[ind])
+				if (i == 0)
+					index.emplace_back(j);
+
+				int msID = UE_list[index[j]];
+				double sinr = min(MS[msID]->scheduling->ESINR[CBlist[i][0]], MS[id]->scheduling->ESINR[CBlist[i][1]]);
+				rate(i, index[j]) = 15000 * log2(1 + sinr);
+				if (MS[msID]->scheduling->downlinkaveragedThroghput > 0)
+					PFmetric.emplace_back(rate(i, index[j]) / MS[msID]->scheduling->downlinkaveragedThroghput);
+				else
+					PFmetric.emplace_back(rate(i, index[j]));
+				if (PFmetric[j] > maxPF)
 				{
-					index.erase(iter);
+					maxPF = PFmetric[j];
+					ind = j;
+				}
+			}
+			//PF排序，只需要找到最大的下标
+			allocation[index[ind]].push_back(i);
+			ratelist[index[ind]] += rate(i, index[ind]);
+			if (ratelist[index[ind]] >= rate_th)//从index中删除下标
+			{
+				if (--flag == 0)//所有用户满足了目标
 					break;
-				}
-			}
-		}
-	}
-
-
-	//根据分配结果，设置TB
-	for (int i = 0; i < num_MS; i++)
-	{
-		int msID = UE_list[i];
-		//allocation和ratelist
-		vector<int> newRB;//需要用RB序列，但是使用码本包含相同RB该怎么办？去重，只包含一次
-		for (int j = 0; j < allocation[i].size(); j++)
-		{
-			int CB_ID = allocation[i][j];
-			for (int k = 0; k < CBlist[CB_ID].size(); k++)
-			{
-				if (RB_belong[CBlist[CB_ID][k]] != msID)
+				for (vector<int>::iterator iter = index.begin(); iter != index.end(); iter++)
 				{
-					//RB_free.erase();  //因为是以RB顺序进行分配，没有进行RB_free的更新，只能用于单业务情况
-					newRB.emplace_back(CBlist[CB_ID][k]);
-					RB_belong[CBlist[CB_ID][k]] = msID;
+					if (*iter == index[ind])
+					{
+						index.erase(iter);
+						break;
+					}
 				}
 			}
 		}
-		allocationMapMS.insert(make_pair(msID, newRB));
-		TB newTB;
-		newTB.eSINR = 0;
-		newTB.TB_ID = msID;
-		newTB.TBsize = ratelist[i];
-		newTB.numRB = newRB.size();
-		TB_entity.push_back(newTB);
+
+		Left_CB += unused_CB;
+		//根据分配结果，设置TB
+		for (int i = 0; i < num_MS; i++)
+		{
+			int msID = UE_list[i];
+			//allocation和ratelist
+			vector<int> newRB;//需要用RB序列，但是使用码本包含相同RB该怎么办？去重，只包含一次
+			for (int j = 0; j < allocation[i].size(); j++)
+			{
+				int CB_ID = allocation[i][j];
+				for (int k = 0; k < CBlist[CB_ID].size(); k++)
+				{
+					if (RB_belong[CBlist[CB_ID][k]] != msID)
+					{
+						//RB_free.erase();  //因为是以RB顺序进行分配，没有进行RB_free的更新，只能用于单业务情况
+						newRB.emplace_back(CBlist[CB_ID][k]);
+						RB_belong[CBlist[CB_ID][k]] = msID;
+					}
+				}
+			}
+			allocationMapMS.insert(make_pair(msID, newRB));
+			TB newTB;
+			newTB.eSINR = 0;
+			newTB.TB_ID = msID;
+			newTB.TBsize = ratelist[i];
+			newTB.numRB = newRB.size();
+			TB_entity.push_back(newTB);
+		}
 	}
 
 }
@@ -988,22 +1026,23 @@ void SchedulingBS::PFSchedule(int bsID)
 					//RB个数变化对频谱效率的影响？
 					for (int i = 0; i < num_RB; i++)
 					{
-						Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;
-						newMap.second.push_back(RB_free[0]);
-						RB_belongMS.push_back(RB_free[0]);
-						RB_belong[RB_free[0]] = msID;
-						RB_free.erase(RB_free.begin());
+						Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;
+						newMap.second.push_back(RB_free.front());
+						RB_belongMS.push_back(RB_free.front());
+						RB_belong[RB_free.front()] = msID;
+						RB_free.pop_front();
 					}
 					MS[msID]->scheduling->HARQbuffer.erase(MS[msID]->scheduling->HARQbuffer.begin());
 					allocationMapMS.insert(newMap);//之前忘记更新Map和TB
 					TB_entity.push_back(temp);
 					if (RB_free.size() == 0)
 					{
-						int size = RB_belongMS.size();
+						//所有资源都被使用，平均分配功率
+						int size = Sim.scheduling->numRB;
+						double ra = (double)(1.0 / size);
 						for (int i = 0; i < size; i++)
 						{
-							int re_id = RB_belongMS[i];
-							ratio[re_id] = (double)(1.0 / size);
+							ratio[i] = ra;
 						}
 						cout << "BS" << id << "无可用RB了" << endl;
 						delete[] index;
@@ -1014,7 +1053,8 @@ void SchedulingBS::PFSchedule(int bsID)
 				{
 					if (MS[msID]->scheduling->msBuffer > 0) //有数据要传     && MS[msID]->scheduling->MCS != -1
 					{
-						int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, MS[msID]->scheduling->msBuffer);
+						double datasize = min(MS[msID]->scheduling->msBuffer, 4000.0);
+						int num_RB = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, datasize);
 
 						vector<int> newRB;
 						pair <int, vector <int> > newMap = make_pair(msID, newRB);
@@ -1031,18 +1071,17 @@ void SchedulingBS::PFSchedule(int bsID)
 						{
 							if (RB_free.size() > 0) //只能使用空闲的RB资源
 							{
-								Sim.scheduling->resource_used(bsID, RB_free[0]) = 1;//标记使用了该资源，在TTI结束时清除标记
-
-								newMap.second.push_back(RB_free[0]);
-								RB_belongMS.push_back(RB_free[0]);
-								RB_belong[RB_free[0]] = msID;
-								RB_free.erase(RB_free.begin());
+								Sim.scheduling->resource_used(bsID, RB_free.front()) = 1;//标记使用了该资源，在TTI结束时清除标记
+								newMap.second.push_back(RB_free.front());
+								RB_belongMS.push_back(RB_free.front());
+								RB_belong[RB_free.front()] = msID;
+								RB_free.pop_front();
 							}
 							else
 							{
 								if (newMap.second.size() > 0)
 								{
-									MS[msID]->performance->packet++;
+									//MS[msID]->performance->packet++;
 									allocationMapMS.insert(newMap);
 
 									//根据TB大小，切割整合packet
@@ -1050,10 +1089,15 @@ void SchedulingBS::PFSchedule(int bsID)
 									uint TBsize = MS[msID]->scheduling->GetTBsize(MS[msID]->scheduling->downlinkspectralEfficiency, RBsize);
 									newTB.numRB = RBsize;
 									newTB.TBsize = TBsize;
-
+									MS[msID]->scheduling->msBuffer -= TBsize;
 									while (TBsize > 0)
 									{
 										Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+										if (temp.GetID() == -1)
+										{
+											temp.SetID(MS[msID]->scheduling->index.front());
+											MS[msID]->scheduling->index.pop_front();
+										}
 										if (TBsize >= temp.Gettotalsize())
 										{
 											TBsize -= temp.Gettotalsize();
@@ -1065,7 +1109,7 @@ void SchedulingBS::PFSchedule(int bsID)
 											uint resbit = temp.Gettotalsize() - TBsize;
 											temp.SetSize(TBsize - temp.GetHead());
 											temp.Setdivide(true);
-											temp.Setindex(MS[msID]->scheduling->divide_index[0]);
+											temp.Setindex(MS[msID]->scheduling->divide_index.front());
 											newTB.pack.push_back(temp);
 
 											temp.SetSize(resbit);
@@ -1073,19 +1117,20 @@ void SchedulingBS::PFSchedule(int bsID)
 											MS[msID]->scheduling->PacketBuffer.pop_front();
 											MS[msID]->scheduling->PacketBuffer.push_front(temp);
 											//去除使用的切割标记
-											MS[msID]->scheduling->divide_index.erase(MS[msID]->scheduling->divide_index.begin());
+											MS[msID]->scheduling->divide_index.pop_front();
+											MS[msID]->scheduling->msBuffer += temp.GetHead();
 											break;
 										}
 									}
 									TB_entity.push_back(newTB);
 								}
 
-								//平均分配功率
-								int size = RB_belongMS.size();
+								//资源全部使用，平均分配功率
+								int size = Sim.scheduling->numRB;
+								double ra = (double)(1.0 / size);
 								for (int i = 0; i < size; i++)
 								{
-									int re_id = RB_belongMS[i];
-									ratio[re_id] = (double)(1.0 / size);
+									ratio[i] = ra;
 								}
 								cout << "BS" << id << "无可用RB了" << endl;
 								delete[] index;
@@ -1094,28 +1139,75 @@ void SchedulingBS::PFSchedule(int bsID)
 						}
 
 						//资源充足，所有packet都放入TB
-						while (!MS[msID]->scheduling->PacketBuffer.empty())
+						newTB.TBsize = (uint)datasize;
+						MS[msID]->scheduling->msBuffer -= datasize;
+						//不是达到上限
+						if (MS[msID]->scheduling->msBuffer == 0)
 						{
-							newTB.pack.push_back(MS[msID]->scheduling->PacketBuffer.front());
-							MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+							while (!MS[msID]->scheduling->PacketBuffer.empty())
+							{
+								Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+								if (temp.GetID() == -1)
+								{
+									temp.SetID(MS[msID]->scheduling->index.front());
+									MS[msID]->scheduling->index.pop_front();
+								}
+								newTB.pack.push_back(temp);
+								MS[msID]->scheduling->PacketBuffer.pop_front();//所有packet出缓存。如果传输失败，在检测时再放入缓存的头部
+							}
 						}
-						newTB.TBsize = (uint)MS[msID]->scheduling->msBuffer;
+						//上限4000
+						else
+						{
+							uint TBsize = (uint)datasize;
+							while (TBsize > 0)
+							{
+								Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+								if (temp.GetID() == -1)
+								{
+									temp.SetID(MS[msID]->scheduling->index.front());
+									MS[msID]->scheduling->index.pop_front();
+								}
+								if (TBsize >= temp.Gettotalsize())
+								{
+									TBsize -= temp.Gettotalsize();
+									newTB.pack.push_back(temp);
+									MS[msID]->scheduling->PacketBuffer.pop_front();
+								}
+								else
+								{
+									uint resbit = temp.Gettotalsize() - TBsize;
+									temp.SetSize(TBsize - temp.GetHead());
+									temp.Setdivide(true);
+									temp.Setindex(MS[msID]->scheduling->divide_index.front());
+									newTB.pack.push_back(temp);
+
+									temp.SetSize(resbit);
+									//切割剩余部分留在缓存中
+									MS[msID]->scheduling->PacketBuffer.pop_front();
+									MS[msID]->scheduling->PacketBuffer.push_front(temp);
+									//去除使用的切割标记
+									MS[msID]->scheduling->divide_index.pop_front();
+									MS[msID]->scheduling->msBuffer += temp.GetHead();
+									break;
+								}
+							}
+						}
 						newTB.numRB = num_RB;
 						TB_entity.push_back(newTB);
 
-						MS[msID]->performance->packet++;//统计TB个数
+						//MS[msID]->performance->packet++;//统计TB个数
 						allocationMapMS.insert(newMap);
 					}
 				}
-
-				//资源充足时的功率分配系数
-				//平均分配功率
-				int size = RB_belongMS.size();
-				for (int i = 0; i < size; i++)
-				{
-					int re_id = RB_belongMS[i];
-					ratio[re_id] = (double)(1.0 / size);
-				}
+			}
+			//资源充足时的功率分配系数
+			//平均分配功率
+			int size = RB_belongMS.size();
+			for (list<int>::iterator it = RB_belongMS.begin(); it != RB_belongMS.end(); it++)
+			{
+				int re_id = *it;
+				ratio[re_id] = (double)(1.0 / size);
 			}
 
 			delete[] index; //析构动态数组
@@ -1125,6 +1217,7 @@ void SchedulingBS::PFSchedule(int bsID)
 
 void SchedulingBS::RRSchedule(int bsID)
 {
+	//没有考虑传输块太大（设置传输上限），导致序号不够用
 	if (Sim.OFDM == 0)
 	{
 		//功率分配
@@ -1193,10 +1286,15 @@ void SchedulingBS::RRSchedule(int bsID)
 					while (TBsize > 0 && MS[msID]->scheduling ->msBuffer>0)
 					{
 						Packet temp = MS[msID]->scheduling->PacketBuffer.front();
+						if (temp.GetID() == -1)
+						{
+							temp.SetID(MS[msID]->scheduling->index.front());
+							MS[msID]->scheduling->index.pop_front();
+						}
 						if (TBsize >= temp.Gettotalsize())
 						{
 							TBsize -= temp.Gettotalsize();
-							MS[msID]->scheduling->msBuffer -= temp.GetSize();
+							MS[msID]->scheduling->msBuffer -= temp.Gettotalsize();
 							TB_size += temp.Gettotalsize();
 							newTB.pack.push_back(temp);
 							MS[msID]->scheduling->PacketBuffer.pop_front();
@@ -1206,7 +1304,7 @@ void SchedulingBS::RRSchedule(int bsID)
 							uint resbit = temp.Gettotalsize() - TBsize;
 							temp.SetSize(TBsize - temp.GetHead());
 							temp.Setdivide(true);
-							temp.Setindex(MS[msID]->scheduling->divide_index[0]);
+							temp.Setindex(MS[msID]->scheduling->divide_index.front());
 							newTB.pack.push_back(temp);
 
 							MS[msID]->scheduling->msBuffer -= TBsize - temp.GetHead();
@@ -1217,7 +1315,7 @@ void SchedulingBS::RRSchedule(int bsID)
 							MS[msID]->scheduling->PacketBuffer.pop_front();
 							MS[msID]->scheduling->PacketBuffer.push_front(temp);
 							//去除使用的切割标记
-							MS[msID]->scheduling->divide_index.erase(MS[msID]->scheduling->divide_index.begin());
+							MS[msID]->scheduling->divide_index.pop_front();
 							break;
 						}
 					}
@@ -1227,10 +1325,16 @@ void SchedulingBS::RRSchedule(int bsID)
 				}
 				else
 				{
+					MS[msID]->scheduling->msBuffer = 0;
 					newTB.TBsize = TBsize;
 					while (TBsize > 0)
 					{
 						Packet temp;
+						if (temp.GetID() == -1)
+						{
+							temp.SetID(MS[msID]->scheduling->index.front());
+							MS[msID]->scheduling->index.pop_front();
+						}
 						if (TBsize > temp.Gettotalsize())
 						{
 							TBsize -= temp.Gettotalsize();
@@ -2023,10 +2127,10 @@ void SchedulingBS::Reset(int BSID)
 	//修改后，保证可用资源是按序号升序排序
 	for (int i = flag-1; i>=0; i--)
 	{
-		RB_free.insert(RB_free.begin(),RB_belongMS[i]);
-		RB_belong(RB_belongMS[i]) = -1;
-		ratio[RB_belongMS[i]] = 0;
-		RB_belongMS.erase(RB_belongMS.begin()+i);
+		RB_free.push_front(RB_belongMS.back());
+		RB_belong(RB_belongMS.back()) = -1;
+		ratio[RB_belongMS.back()] = 0;
+		RB_belongMS.pop_back();
 	}
 	//清空TB,释放空间
 	vector<TB> vecEmpty;

@@ -86,6 +86,7 @@ public:
 	void WrapAround(); //Wraparound
 	void Associate(int msID, arma::vec RSRP); // Association
 	void PlaceRandomHexagonal(); // Place in a random pattern in hexagonal grid
+	void PlaceRandomCircle();
 	arma::mat LargeScaleParameter(int ChannelModel, int ChannelCondition, int msID, int bsID);
 	void ConcludeIteration(); // Iteration conclusion
 	void Conclude(); // Simulation conclusion

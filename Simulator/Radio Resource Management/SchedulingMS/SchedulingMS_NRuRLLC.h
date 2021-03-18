@@ -84,8 +84,8 @@ public:
 	//int Timer; //定时器
 	//新增packet相关操作
 	deque<Packet> PacketBuffer;//RLC SDU包缓存
-	vector<uint> index;//可用序号0~255，最大一个用户可同时有256个RLC SDU
-	vector<int> divide_index;//切割序号的发放
+	list<int> index;//可用序号0~255，最大一个用户可同时有256个RLC SDU
+	list<int> divide_index;//切割序号的发放
 
 	void Initialize(int ms);
 	void BufferUpdate();

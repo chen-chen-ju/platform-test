@@ -211,17 +211,13 @@ void SchedulingMS::BufferUpdate()//每次数据到达相当于来一个RLC SDU
 		{
 			if (index.size() == 0)
 				cout << "警告：缓存区数据包个数超过了256" << endl;
-			newpakcket.SetID(index[0]);//packet的唯一标识
-			index.erase(index.begin());
 			PacketBuffer.push_back(newpakcket);
 		}
 		if (res > 0)//最后一个包可能不是填满的
 		{
 			if (index.size() == 0)
 				cout << "警告：缓存区数据包个数超过了256" << endl;
-			newpakcket.SetID(index[0]);
 			newpakcket.SetSize(res);
-			index.erase(index.begin());
 			PacketBuffer.push_back(newpakcket);
 		}
 
@@ -315,9 +311,10 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 	//if (id == 20)
 		//int t = 1;
 
-	if (Sim.TTI == 0)
+	if (Sim.TTI == 0 || Sim.scheduling->UseSCMA)
 	{
-		double noise = pow(10, (-174.0 / 10.0)) * 200 * 1e3;//不要除以1000，信号的单位是dBm。只算一个RB带宽内的噪声功率
+		//double noise = pow(10, (-174.0 / 10.0)) * 200 * 1e3;//不要除以1000，信号的单位是dBm。只算一个RB带宽内的噪声功率
+		double noise = pow(10, (-174.0 / 10.0)) * 15 * 1e3;
 		//noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 
 		arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
@@ -355,7 +352,7 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 				// double(Sim.channel->NumberOfTransmitAntennaPort) 为什么要除以发射天线数量
 				//干扰信号,下行干扰   所有基站都以同发射功率发送信息（某个基站没有使用某个RB，应该是无干扰的）
 			}
-
+			//tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);//让扇区之间没有干扰
 			tempM = MS[id]->channel->FrequencyChannel(0, 0, RBindex) * tempV.col(0);//n*m  m*1 v0是预编码向量
 			if (mode == MMSE)
 				tempIRC = tempM.t() * (tempM * tempM.t() + tempRI + noise * arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i();//.i()求逆矩阵
@@ -395,7 +392,8 @@ void SchedulingMS::Feedback(enum Receive_mode mode)//非完美信道下特征，HARQ 38系
 void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 {
 	//double noise = pow(10, (-174.0 / 10.0)) * Sim.channel->NRuRLLC.bandwidth * 1e6;//不要除以1000，信号的单位是dBm
-	double noise = pow(10, (-174.0 / 10.0)) * 200 * 1e3;
+	//double noise = pow(10, (-174.0 / 10.0)) * 200 * 1e3;
+	double noise = pow(10, (-174.0 / 10.0)) * 15 * 1e3;
 	//noise = noise / Sim.scheduling->numRB;//应该只算一个RB带宽内的噪声功率
 	arma::cx_mat tempRI, tempRHr, tempRH, tempU, tempV, tempM, temph, tempIRC, signal, interferencePlusNoise;
 	arma::vec temps; //10M带宽有50个RB
@@ -453,6 +451,7 @@ void SchedulingMS::ReceivedSINR(TB Tran, enum Receive_mode mode)
 				/// double(Sim.channel->NumberOfTransmitAntennaPort)
 			}
 		}
+		//tempRI.zeros(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort);//让扇区之间没有干扰
 		tempM = MS[id]->channel->FrequencyChannel(0, 0, RBindex)*tempV.col(0);//h1*v0      U0*sigma0
 		if (mode == MMSE)
 			tempIRC = tempM.t()*(tempM*tempM.t() + tempRI + noise*arma::eye(Sim.channel->NumberOfReceiveAntennaPort, Sim.channel->NumberOfReceiveAntennaPort)).i();//1*n

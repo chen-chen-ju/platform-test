@@ -60,21 +60,55 @@ void PerformanceMS::Initialize(int ms)
 
 void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 {
-	if (id == 32)
+	MS[id]->performance->packet++;
+	if (id == 5)
 		int t = MS[id]->scheduling->MCS;
 
 	if (MS[id]->scheduling->Pi == 1)
 	{
 		instantThroughput = 0;
 		instantThroughput0 = 0;
+		PFThroghput = TransBlock.TBsize;
+		TransBlock.rettime++;
+		if (TransBlock.rettime > 3)
+		{
+			for (auto& v : TransBlock.pack)
+			{
+				//时延更新
+
+				int index = v.Getindex(), ID = v.GetID();
+				MS[id]->scheduling->index.push_back(ID);
+				if (v.Getdivide())
+				{
+					if (delay_status[index] < 0 || delay_status[index] >1)
+						cout << "出错：分割包状态错误" << endl;
+					else if (delay_status[index]==0)
+					{
+						delay_status[index] = 1;
+						//时延无穷大
+					}
+					else
+					{
+						delay_status[index] = 0;
+						MS[id]->scheduling->divide_index.push_back(index);
+					}
+				}
+			}
+		}
+		else
+		{
+			for (int i = 0; i < TransBlock.pack.size(); i++)
+				TransBlock.pack[i].Adddelay(8);//增加8个OFDM的传输时延
+			//vector<Packet> temp = TransBlock.pack;
+			MS[id]->scheduling->HARQbuffer.push_back({ TransBlock,8 });
+		}
 	}
 	else
 	{
 		int num_RB = RB_list.size();
 		if (num_RB == 0)
 		{
-			instantThroughput = 0;
-			instantThroughput0 = 0;
+			assert("资源分配不能为0");
 		}
 		else
 		{
@@ -86,13 +120,7 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 			if (arma::randu() > val)
 			{
 				instantThroughput = TB_size * 1000;
-				instantThroughput0 = 15000*log2(1 + temp);
-				if (Sim.network->bufferModel == RRM::NonFullBuffer && TransBlock.rettime == 0)//除了初传，其他情况都保存在HARQ缓存里
-				{
-					MS[id]->scheduling->msBuffer = MS[id]->scheduling->msBuffer - TB_size;
-					if (MS[id]->scheduling->msBuffer < 0)
-						MS[id]->scheduling->msBuffer = 0;
-				}
+				instantThroughput0 = 15000 * log2(1 + temp);
 				vector<Packet>temp = TransBlock.pack;
 				//处理包的时延，整合包的分割
 				for (auto v : temp)
@@ -118,11 +146,21 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 								delay += 14 * Sim.TTI + Sim.OFDM - delay_list[index] + v.Getdelay();
 								delay_status[index] = 0;
 								//归还使用的分割序号
-								MS[id]->scheduling->index.push_back(index);
+								MS[id]->scheduling->divide_index.push_back(index);
+								//归还使用的序号
+								int ID = v.GetID();
+								MS[id]->scheduling->index.push_back(ID);
 							}
 						}
 
 					}
+					else
+					{
+						//归还使用的序号
+						int ID = v.GetID();
+						MS[id]->scheduling->index.push_back(ID);
+					}
+					
 				}
 				
 			}
@@ -131,43 +169,37 @@ void PerformanceMS::Measure(vector <int> RB_list, TB TransBlock)
 				instantThroughput = 0;
 				instantThroughput0 = 0;
 				error_packet++;
-				/*
-				MS[id]->scheduling->Maxrettime += 1;
-				if (MS[id]->scheduling->Maxrettime > 3) //达到最大重传次数限制
-				{
-					MS[id]->scheduling->msBuffer -= TB_size;
-					if (MS[id]->scheduling->msBuffer < 0)
-						MS[id]->scheduling->msBuffer = 0;
-					MS[id]->scheduling->HARQeSINR = 0;
-					MS[id]->scheduling->Maxrettime = 0;
-				}
-				else
-				{
-					while (!TB.empty())
-					{
-						//MS[id]->scheduling->PacketBuffer.push_front(TB.back());//让出错的TB优先重传
-
-						TB.pop_back();
-					}
-				}
-				*/
 				TransBlock.eSINR = TransBlock.eSINR + temp;
-				if (Sim.network->bufferModel == RRM::NonFullBuffer && TransBlock.rettime == 0)//只有non-full情况下需要更新缓存
-				{
-					MS[id]->scheduling->msBuffer -= TB_size;
-					if (MS[id]->scheduling->msBuffer < 0)
-						MS[id]->scheduling->msBuffer = 0;
-				}
 				TransBlock.rettime++;
 				if (TransBlock.rettime > 3)//超过最大重传限制
 				{
-					for (int i = 0; i < TransBlock.pack.size(); i++)
-						TransBlock.pack[i].Adddelay(8);//增加8个OFDM的传输时延
-					//MS[id]->scheduling->HARQeSINR = 0;
-					//MS[id]->scheduling->Maxrettime = 0;
+					for (auto& v : TransBlock.pack)
+					{
+						//时延更新
+
+						int index = v.Getindex(), ID = v.GetID();
+						MS[id]->scheduling->index.push_back(ID);
+						if (v.Getdivide())
+						{
+							if (delay_status[index] < 0 || delay_status[index] >1)
+								cout << "出错：分割包状态错误" << endl;
+							else if (delay_status[index] == 0)
+							{
+								delay_status[index] = 1;
+								//时延无穷大
+							}
+							else
+							{
+								MS[id]->scheduling->divide_index.push_back(index);
+								delay_status[index] = 0;
+							}
+						}
+					}
 				}
 				else
 				{
+					for (int i = 0; i < TransBlock.pack.size(); i++)
+						TransBlock.pack[i].Adddelay(8);//增加8个OFDM的传输时延
 					//vector<Packet> temp = TransBlock.pack;
 					MS[id]->scheduling->HARQbuffer.push_back({TransBlock,8});
 				}
@@ -189,10 +221,13 @@ void PerformanceMS::MeasureSCMA(vector <int> RB_list, TB TransBlock)
 	}
 	else
 	{
-		MS[id]->scheduling->ReceivedSINR(TransBlock, MMSE);
+		//MS[id]->scheduling->ReceivedSINR(TransBlock, MMSE);
 		instantThroughput = TransBlock.TBsize;
+		if (instantThroughput > 256000)
+			effective_num++;
 	}
 	downlinkThroghput = instantThroughput;
+	PFThroghput = instantThroughput;
 }
 
 double PerformanceMS::FER(double SINR, int MCS)//误块率，TB传输出错概率

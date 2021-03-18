@@ -61,14 +61,16 @@ public:
 	map <int, vector <int> > allocationMapUMS; //资源分配，第一个对应UMSID，第二个对应使用的RBID
 	map <int, vector <int> > allocationMapMS;
 	arma::vec RB_belong;//RB的使用情况，-2表示被UMS占用不可抢占，大于0表示使用该RB的MS序号
-	vector<int> RB_belongMS;//被MS使用的RB序列
-	vector<int> RB_free;//未被使用的RB
+	list<int> RB_belongMS;//被MS使用的RB序列
+	list<int> RB_free;//未被使用的RB
 
 	vector<TB> TB_entity;//记录每个用户传输的packet序列，MS用户的TB集合
 	vector<TB> TB_entityUMS;//UMS用户的TB集合
 	vector<double> ratio;//记录功率分配系数，和为1
 
 	vector<vector<int>>CBlist;//每个CB对应的RB序号
+
+	int Left_CB;//剩余CB个数
 
 	double downlinkBuffer;
 	double uplinkBuffer;

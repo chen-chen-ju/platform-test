@@ -62,6 +62,7 @@ public:
 	double msBuffer; // MS buffer for non-full buffer traffic
 	int dataSize; // Data size per traffic
 	int MCS;
+	//bool vary;//下次调度的时间是否到了下一个TTI
 
 	//每个RB上的信息,in_band
 	vector<int> subband_mcs;//带内MCS，每个RB上的SINR情况
@@ -72,8 +73,8 @@ public:
 
 	//新增packet相关操作
 	deque<Packet> PacketBuffer;//RLC SDU包缓存
-	vector<uint> index;//可用序号0~255，最大一个用户可同时有256个RLC SDU
-	vector<int> divide_index;//切割序号的发放
+	list<int> index;//可用序号0~255，最大一个用户可同时有256个RLC SDU
+	list<int> divide_index;//切割序号的发放
 
 	int Needret; //重传标识
 
@@ -96,11 +97,12 @@ public:
 
 	void Initialize(int ms);
 	void BufferUpdate();
+	void HARQUpdate();
 	void Feedback(enum Receive_mode mode);
 	void ReceivedSINR(TB Tran, enum Receive_mode mode);
 	arma::cx_mat* PrecodingMatrix(enum Precoding_Matrix precodingtype, arma::cx_mat *codebook, int type);
 	double GetSpectralEfficiency(double SINR, int &MCS);
-	int GetTBsize(double SpectralEfficiency, double datasize);
+	uint GetTBsize(double SpectralEfficiency, double datasize);
 	double GetTBsize(double SpectralEfficiency, int nprb);
 	bool Updatetimer();
 	void ConcludeIteration(); // Iteration conclusion
